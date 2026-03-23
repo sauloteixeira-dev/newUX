@@ -246,8 +246,8 @@ app.post('/api/login', async (req, res) => {
                             }
                             if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
                             
-                            // Caso ainda sobrem palavras coladas no final (ex: "Aula 1Arquivo")
-                            nome = nome.replace(/([^\s])(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material)$/i, '$1 - $2');
+                            // Limpar qualquer tipo que ainda sobrar no final do nome (ex: "Aula 1 Página", "Video Ferramenta externa")
+                            nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
                             let tipo = 'Material';
                             if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
                             else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
@@ -262,7 +262,7 @@ app.post('/api/login', async (req, res) => {
 
                         // ─── BYPASS via Puppeteer (necessário para JS) ──────
                         const processBypass = async (atv) => {
-                            if (atv.tipo !== 'Ferramenta externa' && atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
+                            if (atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
                             let actPage = null;
                             try {
                                 sendLog(`           🔍 Buscando link de: ${atv.nome}`);
