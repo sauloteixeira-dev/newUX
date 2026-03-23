@@ -23,11 +23,51 @@ function App() {
     return localStorage.getItem('lms_theme') || 'dark';
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const hasSynced = React.useRef(false);
 
   React.useEffect(() => {
     document.body.className = theme;
     localStorage.setItem('lms_theme', theme);
   }, [theme]);
+
+  React.useEffect(() => {
+    if (isAuthenticated && user && user.senha && !hasSynced.current) {
+      hasSynced.current = true;
+      performBackgroundSync(user.matricula, user.senha);
+    }
+  }, [isAuthenticated, user]);
+
+  const performBackgroundSync = async (mat, sen) => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matricula: mat, senha: sen })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const coursesArray = data.data || data;
+        const processedCursos = coursesArray.map(curso => ({
+          ...curso,
+          progresso: curso.progresso || 0
+        }));
+        setCursos(processedCursos);
+        
+        // Atualiza a info do storage no background silenciosamente
+        localStorage.setItem('lms_session', JSON.stringify({
+          isAuthenticated: true,
+          user: user,
+          cursos: processedCursos
+        }));
+      }
+    } catch (err) {
+      console.error('Falha no sync em background:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
@@ -84,6 +124,7 @@ function App() {
              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
            </button>
            <div className="header-spacer"></div>
+           {isSyncing && <span className="sync-badge" title="Atualizando robô pelo Moodle ocultamente">🔄 Att. em tempo real</span>}
            <button onClick={toggleTheme} className="btn-theme" title="Alternar Tema">
              {theme === 'dark' ? '☀️' : '🌙'}
            </button>

@@ -40,7 +40,7 @@ const Login = ({ onLoginSuccess }) => {
       setTimeout(() => {
         const coursesArray = data.data || data; // Extraindo a lista final
         const userNameInfo = data.nome || "Aluno UNIFENAS";
-        onLoginSuccess(coursesArray, { matricula, nome: userNameInfo });
+        onLoginSuccess(coursesArray, { matricula, senha, nome: userNameInfo });
       }, 500);
     } catch (err) {
       clearInterval(timerInterval);

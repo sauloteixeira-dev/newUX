@@ -47,6 +47,25 @@
   font-size: 0.95rem;
 }
 
+.sync-badge {
+  font-size: 0.75rem;
+  background: rgba(37, 99, 235, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.7; }
+  50% { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
 .btn-mobile-menu {
   display: none;
   background: transparent;
