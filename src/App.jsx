@@ -48,10 +48,46 @@ function App() {
         performBackgroundSync(user.matricula, user.senha);
       } else {
         const restante = Math.round((SYNC_INTERVAL_MS - (agora - lastSync)) / 60000);
-        console.log(`[Sync] Próxima atualização em ~${restante} min(s). Usando cache.`);
+        console.log(`[Sync] Próxima atualização completa em ~${restante} min(s).`);
       }
     }
   }, [isAuthenticated, user]);
+
+  React.useEffect(() => {
+    let intervalId;
+    if (isAuthenticated && user && user.senha) {
+      intervalId = setInterval(() => {
+        const recentes = JSON.parse(localStorage.getItem('lms_recent_links') || '[]');
+        if (recentes.length > 0 && !isSyncing) {
+          performRecentSync(user.matricula, user.senha, recentes);
+        }
+      }, 60000); // Checa a cada 1 minuto se há links recentes para rodar
+    }
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, user, isSyncing]);
+
+  const performRecentSync = async (mat, sen, urls) => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/sync-recent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matricula: mat, senha: sen, urls })
+      });
+      if (response.ok) {
+        // Se concluiu com sucesso, limpa os links do storage
+        console.log('[Sync-Recent] Atualização de aulas recentes concluída.');
+        // Pode haver novos itens clicados no meio do processo, filtramos os apenas processados
+        const atuais = JSON.parse(localStorage.getItem('lms_recent_links') || '[]');
+        const novos = atuais.filter(url => !urls.includes(url));
+        localStorage.setItem('lms_recent_links', JSON.stringify(novos));
+      }
+    } catch (err) {
+      console.error('Falha no sync de recentes em background:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const performBackgroundSync = async (mat, sen) => {
     setIsSyncing(true);
@@ -61,21 +97,43 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matricula: mat, senha: sen })
       });
-      if (response.ok) {
-        const data = await response.json();
-        const coursesArray = data.data || data;
+
+      if (!response.body) throw new Error('Sem streaming');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.type === 'success') finalData = chunk;
+          } catch (_) {}
+        }
+      }
+
+      if (finalData) {
+        const coursesArray = finalData.data || finalData;
         const processedCursos = coursesArray.map(curso => ({
           ...curso,
           progresso: curso.progresso || 0
         }));
         setCursos(processedCursos);
-        
-        // Atualiza a info do storage no background silenciosamente
         localStorage.setItem('lms_session', JSON.stringify({
           isAuthenticated: true,
           user: user,
           cursos: processedCursos
         }));
+        localStorage.setItem('lms_last_sync', String(Date.now()));
+        console.log('[Sync] Background sync com notas concluído!');
       }
     } catch (err) {
       console.error('Falha no sync em background:', err);

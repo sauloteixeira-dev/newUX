@@ -98,10 +98,24 @@ const CourseView = ({ curso }) => {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="atividade-item"
+                          onClick={() => {
+                            const recentes = JSON.parse(localStorage.getItem('lms_recent_links') || '[]');
+                            if (!recentes.includes(item.url)) {
+                              recentes.push(item.url);
+                              localStorage.setItem('lms_recent_links', JSON.stringify(recentes));
+                            }
+                          }}
                         >
-                          <span className="atividade-emoji">{tipoIcon(item.tipo)}</span>
-                          <span className="atividade-nome">{item.nome}</span>
-                          <span className="atividade-tipo">{item.tipo}</span>
+                          <div className="atividade-emoji">{tipoIcon(item.tipo)}</div>
+                          <div className="atividade-content">
+                            <span className="atividade-nome">{item.nome}</span>
+                            <div className="atividade-badges">
+                              <span className="atividade-tipo">{item.tipo}</span>
+                              {item.notaStr && item.notaStr !== '-' && (
+                                <span className="atividade-nota">{item.notaStr}</span>
+                              )}
+                            </div>
+                          </div>
                         </a>
                       ))
                     ) : (
@@ -121,6 +135,30 @@ const CourseView = ({ curso }) => {
             <a href={curso.url} target="_blank" rel="noopener noreferrer" className="btn-moodle">
               Abrir no Moodle
             </a>
+          </div>
+        )}
+
+        {/* Resumo das Notas */}
+        {curso.notasResult && (curso.notasResult.somaModulos.length > 0 || curso.notasResult.totalCurso !== '-') && (
+          <div className="secao-card aberta" style={{marginTop: 30, border: '2px solid #3b82f6'}}>
+             <div className="secao-toggle" style={{cursor: 'default'}}>
+               <div className="secao-toggle-left">
+                 <span className="secao-chevron">📊</span>
+                 <span className="secao-nome" style={{color: '#3b82f6'}}>Resumo de Notas do Curso</span>
+               </div>
+             </div>
+             <div className="atividades-lista" style={{padding: '15px 20px', display: 'flex', flexDirection: 'column', gap: '10px'}}>
+                {curso.notasResult.somaModulos.map((mod, mi) => (
+                  <div key={mi} style={{display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #333', paddingBottom: 5}}>
+                    <strong style={{opacity: 0.9}}>{mod.nome}</strong>
+                    <span style={{fontWeight: 'bold', color: '#60a5fa'}}>{mod.nota} pts</span>
+                  </div>
+                ))}
+                <div style={{display: 'flex', justifyContent: 'space-between', paddingTop: 10, fontSize: '1.2rem', fontWeight: 'bold'}}>
+                  <strong style={{color: '#10b981'}}>Total do Curso</strong>
+                  <span style={{color: '#10b981'}}>{curso.notasResult.totalCurso} pts</span>
+                </div>
+             </div>
           </div>
         )}
       </div>

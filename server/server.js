@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import puppeteer from 'puppeteer';
+import axios from 'axios';
+import * as cheerio from 'cheerio';
 
 const app = express();
 const PORT = 3001;
@@ -11,16 +13,27 @@ app.use(express.json());
 // Utilitário: sleep
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Utilitário: Bloquear assets inúteis (Imagens, CSS, Fonts) para performance extrema
+// Utilitário: Bloquear assets inúteis no Puppeteer
 const blockAssets = async (page) => {
     await page.setRequestInterception(true);
     page.on('request', (req) => {
         const type = req.resourceType();
-        if (['image', 'stylesheet', 'font', 'media'].includes(type)) {
-            req.abort();
-        } else {
-            req.continue();
-        }
+        if (['image', 'stylesheet', 'font', 'media'].includes(type)) req.abort();
+        else req.continue();
+    });
+};
+
+// Cria cliente axios com cookies de sessão do Puppeteer
+const buildHttpSession = (cookies) => {
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    return axios.create({
+        headers: {
+            'Cookie': cookieStr,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+        },
+        timeout: 20000,
     });
 };
 
@@ -174,102 +187,77 @@ app.post('/api/login', async (req, res) => {
 
         sendLog(`[4/5] ✅ ${courses.length} matérias encontradas!`);
 
-        // ─── ETAPA 5: Para cada curso, raspar as seções ──────────────────────────
+        // ─── Extrair cookies para HTTP direto ────────────────────────────────
+        const allCookies = await page.cookies('https://ava.unifenas.br');
+        const http = buildHttpSession(allCookies);
         sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
 
-        for (const curso of courses) {
+        // Helper: busca HTML via HTTP e retorna cheerio
+        const getHtml = async (url) => {
+            const resp = await http.get(url);
+            return cheerio.load(resp.data);
+        };
+
+        // ─── Processar cursos em paralelo (lotes de 2) ──────────────────────
+        const processarCurso = async (curso) => {
             sendLog(`  → Acessando: ${curso.name}`);
             try {
-                await page.goto(curso.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-                await sleep(2000);
+                const $ = await getHtml(curso.url);
 
-                const professor = await page.evaluate(() => {
-                    const exactLink = document.querySelector('a.view-user-profile-link');
-                    if (exactLink && exactLink.title) {
-                        return { nome: exactLink.title.trim(), link: exactLink.href || '#' };
-                    }
-                    if (exactLink && exactLink.textContent) {
-                        return { nome: exactLink.textContent.trim(), link: exactLink.href };
-                    }
-                    const contactLink = document.querySelector('.block_course_contacts a[href*="message/"], .block_course_contacts a[href*="user/"]');
-                    if (contactLink) {
-                        return { nome: contactLink.textContent.trim(), link: contactLink.href };
-                    }
-                    const msgLinks = Array.from(document.querySelectorAll('a[href*="message/index.php?id="], a[href*="user/view.php?id="]'));
-                    for (const link of msgLinks) {
-                        let txt = link.textContent.trim();
-                        let parentTxt = link.parentElement ? link.parentElement.textContent : '';
-                        if (parentTxt.match(/Prof|Tutor/i) || txt.match(/Prof|Tutor/i)) {
-                            let cleanName = txt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
-                            if (!cleanName || cleanName.length < 3) cleanName = parentTxt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
-                            return { nome: cleanName || 'Professor', link: link.href };
-                        }
-                    }
-                    return null;
+                // Extrair professor via HTTP+cheerio
+                const profLink = $('a.view-user-profile-link').first();
+                if (profLink.length) {
+                    curso.professor = { nome: (profLink.attr('title') || profLink.text()).trim(), link: profLink.attr('href') || '#' };
+                } else {
+                    const contactLink = $('.block_course_contacts a[href*="message/"], .block_course_contacts a[href*="user/"]').first();
+                    if (contactLink.length) curso.professor = { nome: contactLink.text().trim(), link: contactLink.attr('href') };
+                }
+
+                // Extrair seções via HTTP+cheerio
+                const secoes = [];
+                $('li.section.main[data-sectionid]').each((_, section) => {
+                    const $s = $(section);
+                    const nome = $s.find('h2.sectionname').text().trim() || `Seção ${$s.attr('data-number')}`;
+                    const linkEl = $s.find('.section-header a').first();
+                    const url = linkEl.attr('href') || '';
+                    const locked = $s.find('.fa-lock').length > 0;
+                    const disponibilidade = $s.find('.availabilityinfo').text().replace(/\s+/g, ' ').trim().substring(0, 200);
+                    const progressoTexto = $s.find('.progress-text span').text().trim() || '';
+                    secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: [] });
                 });
 
-                curso.professor = professor;
-
-                const secoes = await page.evaluate(() => {
-                    const resultado = [];
-                    const sectionItems = document.querySelectorAll('li.section.main[data-sectionid]');
-                    sectionItems.forEach(section => {
-                        const sectionNum = section.getAttribute('data-number');
-                        const nameEl = section.querySelector('h2.sectionname');
-                        const nome = nameEl ? nameEl.textContent.trim() : `Seção ${sectionNum}`;
-                        const linkEl = section.querySelector('.section-header a');
-                        const url = linkEl ? linkEl.href : '';
-                        const locked = !!section.querySelector('.fa-lock');
-                        let disponibilidade = '';
-                        const availEl = section.querySelector('.availabilityinfo');
-                        if (availEl) disponibilidade = availEl.textContent.replace(/\s+/g, ' ').trim().substring(0, 200);
-                        const progressEl = section.querySelector('.progress-bar');
-                        const progressText = section.querySelector('.progress-text span');
-                        const progressoTexto = progressText ? progressText.textContent.trim() : (progressEl ? progressEl.style.width : '');
-                        resultado.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: [] });
-                    });
-                    return resultado;
-                });
-
-                // Para cada seção desbloqueada com URL, buscar as atividades internas
+                // ─── Para cada seção: HTTP direto + cheerio ─────────────────
                 for (const secao of secoes) {
                     if (secao.locked || !secao.url) continue;
                     try {
                         sendLog(`       📖 Buscando: ${secao.nome}`);
-                        await page.goto(secao.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                        await sleep(1500);
-
-                        const atividades = await page.evaluate(() => {
-                            const lista = [];
-                            document.querySelectorAll('li.activity[id^="module-"]').forEach(act => {
-                                if (act.classList.contains('modtype_label')) return;
-                                const actLink = act.querySelector('a[href*="mod/"], a[href*="course/"]');
-                                if (!actLink) return;
-                                let nome = '';
-                                const instanceNode = act.querySelector('.instancename');
-                                if (instanceNode) {
-                                    nome = Array.from(instanceNode.childNodes)
-                                        .filter(n => n.nodeType === 3)
-                                        .map(n => n.textContent)
-                                        .join('').trim();
-                                    if (!nome) nome = instanceNode.textContent.replace(/\s+/g, ' ').trim();
-                                }
-                                if (!nome) nome = actLink.textContent.replace(/\s+/g, ' ').trim();
-                                let tipo = 'Material';
-                                if (act.classList.contains('modtype_forum')) tipo = 'Fórum';
-                                else if (act.classList.contains('modtype_assign')) tipo = 'Tarefa';
-                                else if (act.classList.contains('modtype_quiz')) tipo = 'Quiz/Avaliação';
-                                else if (act.classList.contains('modtype_resource')) tipo = 'Arquivo';
-                                else if (act.classList.contains('modtype_lti')) tipo = 'Ferramenta externa';
-                                else if (act.classList.contains('modtype_page')) tipo = 'Página';
-                                else if (act.classList.contains('modtype_url')) tipo = 'Link Externo';
-                                else if (act.classList.contains('modtype_folder')) tipo = 'Pasta';
-                                if (nome) lista.push({ nome, url: actLink.href, tipo });
-                            });
-                            return lista;
+                        const $s = await getHtml(secao.url);
+                        const atividades = [];
+                        $s('li.activity[id^="module-"]').each((_, act) => {
+                            const $a = $s(act);
+                            if ($a.hasClass('modtype_label')) return;
+                            const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
+                            if (!actLink.length) return;
+                            let nome = '';
+                            const instanceNode = $a.find('.instancename');
+                            if (instanceNode.length) {
+                                nome = instanceNode.clone().children('.visually-hidden,.hidden').remove().end().text().trim();
+                                if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
+                            }
+                            if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
+                            let tipo = 'Material';
+                            if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
+                            else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
+                            else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
+                            else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
+                            else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
+                            else if ($a.hasClass('modtype_page')) tipo = 'Página';
+                            else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
+                            else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
+                            if (nome) atividades.push({ nome, url: actLink.attr('href'), tipo });
                         });
 
-                        // ─── BYPASS (Paralelizado com limites) ───
+                        // ─── BYPASS via Puppeteer (necessário para JS) ──────
                         const processBypass = async (atv) => {
                             if (atv.tipo !== 'Ferramenta externa' && atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
                             let actPage = null;
@@ -291,10 +279,7 @@ app.post('/api/login', async (req, res) => {
                                 if (hasForm || hasLink) {
                                     const newPagePromise = new Promise(resolve => {
                                         browser.once('targetcreated', async target => {
-                                            if (target.type() === 'page') {
-                                                const novaAba = await target.page();
-                                                resolve(novaAba);
-                                            }
+                                            if (target.type() === 'page') resolve(await target.page());
                                         });
                                     });
                                     if (hasForm) {
@@ -302,8 +287,8 @@ app.post('/api/login', async (req, res) => {
                                     } else {
                                         await actPage.evaluate(() => {
                                             const links = Array.from(document.querySelectorAll('a'));
-                                            const targetLink = links.find(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.parentElement.classList.contains('urlworkaround') || a.parentElement.classList.contains('resourceworkaround'));
-                                            if (targetLink) targetLink.click();
+                                            const t = links.find(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.parentElement.classList.contains('urlworkaround') || a.parentElement.classList.contains('resourceworkaround'));
+                                            if (t) t.click();
                                         });
                                     }
                                     const result = await Promise.race([
@@ -316,19 +301,16 @@ app.post('/api/login', async (req, res) => {
                                         if (result !== actPage) await result.close();
                                     } else {
                                         const embedUrl = await actPage.evaluate(() => {
-                                            const embed = document.querySelector('iframe#resourceobject, object#resourceobject');
-                                            return embed ? (embed.src || embed.data) : null;
+                                            const e = document.querySelector('iframe#resourceobject, object#resourceobject');
+                                            return e ? (e.src || e.data) : null;
                                         });
-                                        if (embedUrl) {
-                                            atv.url = embedUrl;
-                                        } else if (actPage.url() !== atv.url) {
-                                            atv.url = actPage.url();
-                                        }
+                                        if (embedUrl) atv.url = embedUrl;
+                                        else if (actPage.url() !== atv.url) atv.url = actPage.url();
                                     }
                                 } else {
                                     const embedUrl = await actPage.evaluate(() => {
-                                        const embed = document.querySelector('iframe#resourceobject, object#resourceobject');
-                                        return embed ? (embed.src || embed.data) : null;
+                                        const e = document.querySelector('iframe#resourceobject, object#resourceobject');
+                                        return e ? (e.src || e.data) : null;
                                     });
                                     if (embedUrl) atv.url = embedUrl;
                                 }
@@ -338,29 +320,75 @@ app.post('/api/login', async (req, res) => {
                             }
                         };
 
-                        // Executar bypass em lotes de 3 para não travar o node/puppeteer
-                        const bypassBatchSize = 3;
+                        const bypassBatchSize = 5;
                         for (let i = 0; i < atividades.length; i += bypassBatchSize) {
-                            const batch = atividades.slice(i, i + bypassBatchSize);
-                            await Promise.all(batch.map(processBypass));
+                            await Promise.all(atividades.slice(i, i + bypassBatchSize).map(processBypass));
                         }
 
                         secao.atividades = atividades;
                         sendLog(`         ✓ ${atividades.length} atividades processadas`);
                     } catch (e) {
-                        sendLog(`         ✗ Erro ao raspar seção "${secao.nome}": ${e.message}`);
+                        sendLog(`         ✗ Erro na seção "${secao.nome}": ${e.message}`);
                     }
                 }
 
                 curso.secoes = secoes;
-                sendLog(`     ✓ ${curso.name} concluída`);
+                sendLog(`     ✓ ${curso.name} seções concluídas`);
+
+                // ─── Notas via HTTP+cheerio (sem browser!) ───────────────────
+                try {
+                    sendLog(`     📊 Buscando notas de ${curso.name}...`);
+                    const $g = await getHtml(`https://ava.unifenas.br/grade/report/index.php?id=${curso.id}`);
+                    const notasAtividades = {};
+                    const somaModulos = [];
+                    let totalCurso = '-';
+                    $g('table.user-grade tbody tr').each((_, tr) => {
+                        const $tr = $g(tr);
+                        const th = $tr.find('th.column-itemname');
+                        const td = $tr.find('td.column-grade');
+                        if (!th.length || !td.length) return;
+                        const tagNome = th.find('.gradeitemheader, a').first();
+                        if (!tagNome.length) return;
+                        const name = tagNome.text().trim();
+                        const gradeMatch = td.text().match(/\d+,\d+|\d+\.\d+|\d+/);
+                        const gradeText = gradeMatch ? gradeMatch[0] : '-';
+                        if ($tr.hasClass('courseitem') || th.hasClass('courseitem')) {
+                            totalCurso = gradeText;
+                        } else if ($tr.hasClass('categoryitem') || th.hasClass('categoryitem')) {
+                            somaModulos.push({ nome: name, nota: gradeText });
+                        } else {
+                            const cleanName = name.replace(/^Avaliac(\u00e3|a)o global do f(\u00f3|o)rum\s+/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                            if (cleanName) notasAtividades[cleanName] = gradeText;
+                        }
+                    });
+                    curso.notasResult = { notasAtividades, somaModulos, totalCurso };
+                    // Associar notas às atividades
+                    curso.secoes.forEach(sec => {
+                        (sec.atividades || []).forEach(atv => {
+                            const cleanAtvName = atv.nome.replace(/\s+/g, ' ').trim().toLowerCase();
+                            const keys = Object.keys(notasAtividades);
+                            const matchKey = keys.find(k => k.length > 3 && (k === cleanAtvName || k.includes(cleanAtvName) || cleanAtvName.includes(k)));
+                            if (matchKey) atv.notaStr = notasAtividades[matchKey];
+                        });
+                    });
+                    sendLog(`     ✓ Notas extraídas (${Object.keys(notasAtividades).length} itens)`);
+                } catch (errGrade) {
+                    sendLog(`     ✗ Aviso: erro ao buscar notas: ${errGrade.message}`);
+                }
 
             } catch (err) {
                 sendLog(`     ✗ Erro ao raspar "${curso.name}": ${err.message}`);
                 curso.secoes = [];
                 curso.erro = err.message;
             }
+        };
+
+        // Processar cursos em lotes paralelos de 2
+        const courseBatchSize = 2;
+        for (let i = 0; i < courses.length; i += courseBatchSize) {
+            await Promise.all(courses.slice(i, i + courseBatchSize).map(processarCurso));
         }
+
 
         await browser.close();
         sendLog(`[🎉] Raspagem concluída! ${courses.length} matérias prontas.`);
@@ -370,6 +398,126 @@ app.post('/api/login', async (req, res) => {
 
     } catch (error) {
         console.error(`\n[❌] Erro crítico: ${error.message}`);
+        if (browser) await browser.close();
+        res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
+        res.end();
+    }
+});
+
+app.post('/api/sync-recent', async (req, res) => {
+    const { matricula, senha, urls } = req.body;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.flushHeaders();
+
+    const sendLog = (msg) => {
+        console.log(msg);
+        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) {}
+    };
+
+    if (!matricula || !senha || !urls || !Array.isArray(urls) || urls.length === 0) {
+        res.write(JSON.stringify({ type: 'error', error: 'Matrícula, Senha e URLs são obrigatórios' }) + '\n');
+        return res.end();
+    }
+
+    let browser;
+    try {
+        sendLog(`[🚀] Sincronizando ${urls.length} aula(s) recente(s)...`);
+
+        browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+        });
+
+        const page = await browser.newPage();
+        await page.setViewport({ width: 1280, height: 800 });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await blockAssets(page);
+
+        sendLog('[1/3] 🌐 Autenticando para o acesso rápido...');
+        await page.goto('https://aluno.unifenas.br/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await page.waitForSelector('#username', { timeout: 15000 });
+        await page.type('#username', matricula, { delay: 50 });
+        await page.type('#password', senha, { delay: 50 });
+        const btnEntrar = await page.$('button[type="submit"]');
+        if (btnEntrar) { await btnEntrar.click(); } else { await page.keyboard.press('Enter'); }
+
+        await Promise.race([
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+            sleep(15000)
+        ]).catch(() => {});
+        await sleep(3000);
+
+        sendLog('[2/3] 🔄 Conectando SSO Moodle...');
+        await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
+        await sleep(4500);
+
+        sendLog('[3/3] 📖 Confirmando aulas acessadas... (By-pass)');
+        const processBypass = async (url) => {
+            let actPage = null;
+            try {
+                sendLog(`  -> Acessando: ${url}`);
+                actPage = await browser.newPage();
+                await blockAssets(actPage);
+                await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                await actPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
+                const hasForm = await actPage.$(formBtnSelector);
+                let hasLink = false;
+                if (!hasForm) {
+                    hasLink = await actPage.evaluate(() => {
+                        const links = Array.from(document.querySelectorAll('a'));
+                        return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
+                    });
+                }
+                if (hasForm || hasLink) {
+                    const newPagePromise = new Promise(resolve => {
+                        browser.once('targetcreated', async target => {
+                            if (target.type() === 'page') { resolve(await target.page()); }
+                        });
+                    });
+                    if (hasForm) {
+                        await actPage.click(formBtnSelector);
+                    } else {
+                        await actPage.evaluate(() => {
+                            const links = Array.from(document.querySelectorAll('a'));
+                            const targetLink = links.find(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.parentElement.classList.contains('urlworkaround') || a.parentElement.classList.contains('resourceworkaround'));
+                            if (targetLink) targetLink.click();
+                        });
+                    }
+                    const result = await Promise.race([
+                        newPagePromise,
+                        actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
+                        sleep(4000).then(() => null)
+                    ]);
+                    if (result && result !== actPage) await result.close();
+                }
+                if (actPage && !actPage.isClosed()) await actPage.close();
+                return { url, status: 'ok' };
+            } catch (e) {
+                if (actPage && !actPage.isClosed()) await actPage.close();
+                return { url, status: 'error', error: e.message };
+            }
+        };
+
+        const bypassBatchSize = 3;
+        const results = [];
+        for (let i = 0; i < urls.length; i += bypassBatchSize) {
+            const batch = urls.slice(i, i + bypassBatchSize);
+            const batchResults = await Promise.all(batch.map(processBypass));
+            results.push(...batchResults);
+        }
+
+        await browser.close();
+        sendLog(`[🎉] Atualização de links recentes concluída!`);
+
+        res.write(JSON.stringify({ type: 'success', matricula, results }) + '\n');
+        res.end();
+
+    } catch (error) {
+        console.error(`\n[❌] Erro ao sincronizar recentes: ${error.message}`);
         if (browser) await browser.close();
         res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
         res.end();

@@ -8,6 +8,7 @@ const Login = ({ onLoginSuccess }) => {
   const [logMsg, setLogMsg] = useState('Iniciando...');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -125,13 +126,27 @@ const Login = ({ onLoginSuccess }) => {
           
           <div className="form-group">
             <label>Senha</label>
-            <input 
-              type="password" 
-              value={senha} 
-              onChange={(e) => setSenha(e.target.value)} 
-              required 
-              disabled={loading}
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input 
+                type={showPassword ? "text" : "password"} 
+                value={senha} 
+                onChange={(e) => setSenha(e.target.value)} 
+                required 
+                disabled={loading}
+                style={{ width: '100%', paddingRight: '45px' }}
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                style={{
+                  position: 'absolute', right: '10px', background: 'transparent', border: 'none',
+                  fontSize: '1.2rem', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex'
+                }}
+              >
+                {showPassword ? '👁️' : '🙈'}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn-login" disabled={loading}>
@@ -147,15 +162,8 @@ const Login = ({ onLoginSuccess }) => {
         </form>
         
         {loading && (
-          <div className="loading-container" style={{ marginTop: '20px' }}>
-            {/* Log em tempo real - substitui os textos fixos */}
-            <p className="loading-log-msg">{logMsg}</p>
-            <div className="progress-bar-track">
-              <div 
-                className="progress-bar-fill"
-                style={{ width: `${progress}%` }}
-              ></div>
-            </div>
+          <div className="loading-container" style={{ marginTop: '20px', textAlign: 'center' }}>
+            <p className="loading-log-msg" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{logMsg}</p>
           </div>
         )}
       </div>
