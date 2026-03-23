@@ -225,48 +225,90 @@ app.post('/api/login', async (req, res) => {
                 const secoes = [];
                 $('li.section.main[data-sectionid]').each((_, section) => {
                     const $s = $(section);
-                    const nome = $s.find('h2.sectionname').text().trim() || `Seção ${$s.attr('data-number')}`;
-                    const linkEl = $s.find('.section-header a').first();
+                    const nome = $s.find('h2.sectionname, h3.sectionname').text().trim() || `Seção ${$s.attr('data-number')}`;
+                    const linkEl = $s.find('.section-header a, .sectionname a').first();
                     const url = linkEl.attr('href') || '';
                     const locked = $s.find('.fa-lock').length > 0;
                     const disponibilidade = $s.find('.availabilityinfo').text().replace(/\s+/g, ' ').trim().substring(0, 200);
                     const progressoTexto = $s.find('.progress-text span').text().trim() || '';
-                    secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: [] });
+                    
+                    // Pré-buscar atividades já presentes nesta seção na página principal
+                    const atividadesPre = [];
+                    $s.find('li.activity[id^="module-"]').each((__, act) => {
+                        const $a = $(act);
+                        if ($a.hasClass('modtype_label')) return;
+                        const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
+                        if (!actLink.length) return;
+                        let aNome = '';
+                        const instanceNode = $a.find('.instancename');
+                        if (instanceNode.length) {
+                            aNome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
+                            if (!aNome) aNome = instanceNode.text().replace(/\s+/g, ' ').trim();
+                        }
+                        if (!aNome) aNome = actLink.text().replace(/\s+/g, ' ').trim();
+
+                        aNome = aNome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
+                        let tipo = 'Material';
+                        if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
+                        else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
+                        else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
+                        else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
+                        else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
+                        else if ($a.hasClass('modtype_page')) tipo = 'Página';
+                        else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
+                        else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
+                        if (aNome) atividadesPre.push({ nome: aNome, url: actLink.attr('href'), tipo });
+                    });
+
+                    secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: atividadesPre });
                 });
 
                 // ─── Para cada seção: HTTP direto + cheerio ─────────────────
                 for (const secao of secoes) {
-                    if (secao.locked || !secao.url) continue;
-                    try {
-                        sendLog(`       📖 Buscando: ${secao.nome}`);
-                        const $s = await getHtml(secao.url);
-                        const atividades = [];
-                        $s('li.activity[id^="module-"]').each((_, act) => {
-                            const $a = $s(act);
-                            if ($a.hasClass('modtype_label')) return;
-                            const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
-                            if (!actLink.length) return;
-                            let nome = '';
-                            const instanceNode = $a.find('.instancename');
-                            if (instanceNode.length) {
-                                nome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
-                                if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
-                            }
-                            if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
+                    if (secao.locked) continue;
+                    
+                    let atividades = secao.atividades; // Usa atividades já baixadas do DOM principal
+                    
+                    // Somente faz requisição extra se ESTA seção não veio pré-carregada E tiver URL externa real
+                    if (atividades.length === 0 && secao.url && secao.url.includes('&section=')) {
+                        try {
+                            sendLog(`       📖 Buscando sub-seção: ${secao.nome}`);
+                            const $s = await getHtml(secao.url);
+                            $s('li.activity[id^="module-"]').each((_, act) => {
+                                const $a = $s(act);
+                                if ($a.hasClass('modtype_label')) return;
+                                const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
+                                if (!actLink.length) return;
+                                let nome = '';
+                                const instanceNode = $a.find('.instancename');
+                                if (instanceNode.length) {
+                                    nome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
+                                    if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
+                                }
+                                if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
 
-                            // Limpar qualquer tipo que ainda sobrar no final do nome (ex: "Aula 1 Página", "Video Ferramenta externa")
-                            nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
-                            let tipo = 'Material';
-                            if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
-                            else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
-                            else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
-                            else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
-                            else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
-                            else if ($a.hasClass('modtype_page')) tipo = 'Página';
-                            else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
-                            else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
-                            if (nome) atividades.push({ nome, url: actLink.attr('href'), tipo });
-                        });
+                                nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
+                                let tipo = 'Material';
+                                if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
+                                else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
+                                else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
+                                else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
+                                else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
+                                else if ($a.hasClass('modtype_page')) tipo = 'Página';
+                                else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
+                                else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
+                                if (nome) atividades.push({ nome, url: actLink.attr('href'), tipo });
+                            });
+                        } catch (e) {
+                            sendLog(`         ✗ Erro na sub-seção "${secao.nome}": ${e.message}`);
+                        }
+                    }
+
+                    if (atividades.length > 0) {
+                        secao.atividades = atividades;
+                        sendLog(`         ✓ ${atividades.length} atividades pré-carregadas em ${secao.nome}`);
+                    }
+                }
 
                         // ─── BYPASS via Puppeteer (necessário para JS) ──────
                         const processBypass = async (atv) => {
