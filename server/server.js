@@ -192,30 +192,37 @@ app.post('/api/login', async (req, res) => {
                 await sleep(2000);
 
                 const professor = await page.evaluate(() => {
-                    // 1. Tenta achar link de mensagem direto
+                    // Try exact contact structure common in Moodle: .contact, .teachers, .userpicture
+                    const contactLink = document.querySelector('.block_course_contacts a[href*="message/"], .block_course_contacts a[href*="user/"]');
+                    if (contactLink) {
+                        return { nome: contactLink.textContent.trim(), link: contactLink.href };
+                    }
+
+                    // Try all message/user links and find one containing Professor or Tutor
                     const msgLinks = Array.from(document.querySelectorAll('a[href*="message/index.php?id="], a[href*="user/view.php?id="]'));
                     for (const link of msgLinks) {
-                        const txt = link.textContent.trim() || (link.parentElement && link.parentElement.textContent.replace(/Mensagem.*/i, '').trim());
-                        if (txt && !txt.toLowerCase().includes('participantes') && !txt.toLowerCase().includes('notas')) {
-                            return {
-                                nome: txt.replace(/Prof\.|Professor[a]?\s*?:?/ig, '').trim() || 'Professor',
-                                link: link.href
-                            };
+                        let txt = link.textContent.trim();
+                        let parentTxt = link.parentElement ? link.parentElement.textContent : '';
+                        
+                        // We check if the link or its direct parent container explicitly mentions Professor
+                        if (parentTxt.match(/Prof|Tutor/i) || txt.match(/Prof|Tutor/i)) {
+                            let cleanName = txt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
+                            if (!cleanName || cleanName.length < 3) cleanName = parentTxt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
+                            return { nome: cleanName || 'Professor', link: link.href };
                         }
                     }
-                    
-                    // 2. Tenta achar pelos tutores/professores no bloco de texto
-                    const profNode = Array.from(document.querySelectorAll('h3, h4, strong, blockquote, div, span, p')).find(el => {
-                        const t = el.textContent.toLowerCase();
-                        // Garante que é um bloco pequeno (nome de pessoa) e não um texto gigante
-                        return (t.includes('professor:') || t.includes('tutor:') || t.includes('prof(')) && t.length < 100 && el.children.length <= 1;
-                    });
-                    
-                    if (profNode) {
-                        const text = profNode.textContent.replace(/.*(?:Professor[a]?|Tutor[a]?|Prof\.)\s*:\s*/i, '').trim();
-                        if (text && text.length > 2) {
-                            const parentLink = profNode.closest('div, li')?.querySelector('a[href*="message"], a[href*="user"]');
-                            return { nome: text, link: parentLink ? parentLink.href : '' };
+
+                    // Look for any header/bold mentioning Professor
+                    const textElements = Array.from(document.querySelectorAll('h3, h4, h5, strong, b, span, p, div.no-overflow'));
+                    for (let el of textElements) {
+                        const t = el.textContent.trim();
+                        if (t.match(/Prof\.|Professor[a]?/i) && t.length > 4 && t.length < 80) {
+                            let clean = t.replace(/.*(?:Prof\.|Professor[a]?[s]?)\s*[\:\-]?/i, '').replace(/Mensagem.*/i, '').trim();
+                            if (!clean) continue;
+                            
+                            // Let's try to grab a nearby link
+                            let linkEl = el.closest('div, li, section')?.querySelector('a[href*="message"], a[href*="user"]');
+                            return { nome: clean || 'Professor', link: linkEl ? linkEl.href : '' };
                         }
                     }
                     return null;
