@@ -1,20 +1,25 @@
-FROM ghcr.io/puppeteer/puppeteer:latest
+FROM node:20-slim
 
+# Instala o Google Chrome Stable e as dependências que ele precisa
+RUN apt-get update \
+    && apt-get install -y wget gnupg \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg \
+    && sh -c 'echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
+      --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pula o download do Chromium do Puppeteer, usaremos o Chrome instalado acima
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 WORKDIR /usr/src/app
 
-# Copia os arquivos de dependência com permissão correta
-COPY --chown=pptruser:pptruser package*.json ./
-
-# Instala as dependências
+COPY package*.json ./
 RUN npm ci
 
-# Copia o restante do código
-COPY --chown=pptruser:pptruser . .
+COPY . .
 
-# Expõe a porta que o serviço usará
 EXPOSE 3001
-
-# Comando de inicialização
 CMD ["node", "server.js"]
