@@ -192,6 +192,15 @@ app.post('/api/login', async (req, res) => {
                 await sleep(2000);
 
                 const professor = await page.evaluate(() => {
+                    // 1. Selector exato fornecido pelo usuario: a.view-user-profile-link com title
+                    const exactLink = document.querySelector('a.view-user-profile-link');
+                    if (exactLink && exactLink.title) {
+                        return { nome: exactLink.title.trim(), link: exactLink.href || '#' };
+                    }
+                    if (exactLink && exactLink.textContent) {
+                         return { nome: exactLink.textContent.trim(), link: exactLink.href };
+                    }
+
                     // Try exact contact structure common in Moodle: .contact, .teachers, .userpicture
                     const contactLink = document.querySelector('.block_course_contacts a[href*="message/"], .block_course_contacts a[href*="user/"]');
                     if (contactLink) {
