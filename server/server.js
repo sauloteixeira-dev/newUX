@@ -48,7 +48,7 @@ app.post('/api/login', async (req, res) => {
 
     const sendLog = (msg) => {
         console.log(msg);
-        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) {}
+        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) { }
     };
 
     if (!matricula || !senha) {
@@ -64,8 +64,8 @@ app.post('/api/login', async (req, res) => {
             headless: 'new',
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
             args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox', 
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
@@ -106,7 +106,7 @@ app.post('/api/login', async (req, res) => {
         await Promise.race([
             page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
             sleep(15000)
-        ]).catch(() => {});
+        ]).catch(() => { });
         await sleep(4000); // extra para cookies SSO
 
         const urlAposLogin = page.url();
@@ -254,7 +254,7 @@ app.post('/api/login', async (req, res) => {
                                 if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
                             }
                             if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
-                            
+
                             // Limpar qualquer tipo que ainda sobrar no final do nome (ex: "Aula 1 Página", "Video Ferramenta externa")
                             nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
                             let tipo = 'Material';
@@ -426,7 +426,7 @@ app.post('/api/sync-recent', async (req, res) => {
 
     const sendLog = (msg) => {
         console.log(msg);
-        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) {}
+        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) { }
     };
 
     if (!matricula || !senha || !urls || !Array.isArray(urls) || urls.length === 0) {
@@ -442,8 +442,8 @@ app.post('/api/sync-recent', async (req, res) => {
             headless: 'new',
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
             args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox', 
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
@@ -468,7 +468,7 @@ app.post('/api/sync-recent', async (req, res) => {
         await Promise.race([
             page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
             sleep(15000)
-        ]).catch(() => {});
+        ]).catch(() => { });
         await sleep(3000);
 
         sendLog('[2/3] 🔄 Conectando SSO Moodle...');
