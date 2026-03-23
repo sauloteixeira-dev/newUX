@@ -241,10 +241,13 @@ app.post('/api/login', async (req, res) => {
                             let nome = '';
                             const instanceNode = $a.find('.instancename');
                             if (instanceNode.length) {
-                                nome = instanceNode.clone().children('.visually-hidden,.hidden').remove().end().text().trim();
+                                nome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
                                 if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
                             }
                             if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
+                            
+                            // Caso ainda sobrem palavras coladas no final (ex: "Aula 1Arquivo")
+                            nome = nome.replace(/([^\s])(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material)$/i, '$1 - $2');
                             let tipo = 'Material';
                             if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
                             else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
