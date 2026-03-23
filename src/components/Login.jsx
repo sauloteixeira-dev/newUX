@@ -58,7 +58,7 @@ const Login = ({ onLoginSuccess }) => {
       <div className="login-box">
         <div className="login-header">
           <div className="logo-icon-large">UN</div>
-          <h1>Portal ADS Express</h1>
+          <h1>Ambiente Virtual</h1>
           <p>Faça login com os seus dados do Moodle</p>
         </div>
 

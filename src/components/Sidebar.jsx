@@ -7,7 +7,7 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user }) => {
       <div className="sidebar-header">
         <div className="logo-container">
           <div className="logo-icon">UN</div>
-          <h2>Portal ADS Express</h2>
+          <h2>Ambiente Virtual</h2>
         </div>
       </div>
       
