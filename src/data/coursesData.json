@@ -1,0 +1,86 @@
+[
+  {
+    "id": "ads-moveis-1",
+    "nome": "Desenvolvimento para Dispositivos Móveis",
+    "codigo": "EO0601",
+    "progresso": 0,
+    "status": "active",
+    "unidades": [
+      {
+        "id": "u1",
+        "numero": 1,
+        "titulo": "Introdução ao desenvolvimento para dispositivos móveis",
+        "video_aula": "https://fast.player.liquidplatform.com/pApiv2/embed/cee29914fad5b594d8f5918df1e801fd/ffb073265f4f93ee628be54760781207?libras=0",
+        "podcast": "https://ava.unifenas.br/mod/resource/view.php?id=27787",
+        "pdf_resumo": "https://statics-marketplace.plataforma.grupoa.education/sagah/bf747a14-3ca0-4914-af85-dbff5d58a4e8/32fc5eab-98ec-4af7-a6d2-d5c73ca199ee.pdf",
+        "materiais_didaticos": [
+          { "id": "mat-1", "label": "Apresentação", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Apresentação", "concluido": false },
+          { "id": "mat-2", "label": "Infográfico", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Infográfico", "concluido": false },
+          { "id": "mat-3", "label": "Conteúdo do Livro", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Conteúdo do Livro", "concluido": false },
+          { "id": "mat-4", "label": "Dica do Professor (Vídeo)", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Dica do Professor", "concluido": false },
+          { "id": "mat-5", "label": "Exercícios", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Exercícios", "concluido": false },
+          { "id": "mat-6", "label": "Na prática", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Na prática", "concluido": false },
+          { "id": "mat-7", "label": "Saiba mais", "url": "https://unifenas.grupoa.education/sagah/object/default/126034192#Saiba mais", "concluido": false }
+        ]
+      },
+      {
+        "id": "u2",
+        "numero": 2,
+        "titulo": "Arquitetura e Ciclo de Vida do Aplicativo",
+        "video_aula": "",
+        "podcast": "",
+        "pdf_resumo": "",
+        "materiais_didaticos": [
+          { "id": "mat-8", "label": "Apresentação", "url": "#", "concluido": false },
+          { "id": "mat-9", "label": "Estados da Aplicação", "url": "#", "concluido": false },
+          { "id": "mat-10", "label": "Desafio Prático", "url": "#", "concluido": false }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ads-ux-1",
+    "nome": "UX e Design de Interfaces",
+    "codigo": "UE0231",
+    "progresso": 33,
+    "status": "active",
+    "unidades": [
+      {
+        "id": "u3",
+        "numero": 1,
+        "titulo": "Prototipagem de Baixa e Alta Fidelidade",
+        "video_aula": "",
+        "podcast": "",
+        "pdf_resumo": "",
+        "materiais_didaticos": [
+          { "id": "mat-11", "label": "Wireframes vs Protótipos Navegáveis", "url": "#", "concluido": true },
+          { "id": "mat-12", "label": "Ferramentas do mercado", "url": "#", "concluido": true },
+          { "id": "mat-13", "label": "Avaliação Heurística", "url": "#", "concluido": false }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "ads-web-2",
+    "nome": "Desenvolvimento Web Fullstack",
+    "codigo": "W0552",
+    "progresso": 0,
+    "status": "active",
+    "unidades": [
+      {
+        "id": "u1w",
+        "numero": 1,
+        "titulo": "Revisão de Fundamentos Web (HTML, CSS, JS)",
+        "video_aula": "",
+        "podcast": "",
+        "pdf_resumo": "",
+        "materiais_didaticos": [
+          { "id": "mat-14", "label": "Estruturas Semânticas HTML5", "url": "#", "concluido": false },
+          { "id": "mat-15", "label": "Flexbox e CSS Grid", "url": "#", "concluido": true },
+          { "id": "mat-16", "label": "Manipulação do DOM Externa", "url": "#", "concluido": false },
+          { "id": "mat-17", "label": "Introdução a Single Page Applications", "url": "#", "concluido": false }
+        ]
+      }
+    ]
+  }
+]
