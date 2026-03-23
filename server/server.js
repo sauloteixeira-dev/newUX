@@ -235,7 +235,7 @@ app.post('/api/login', async (req, res) => {
                 for (const secao of secoes) {
                     if (secao.locked || !secao.url) continue;
                     try {
-                        sendLog(`       📖 Raspando: ${secao.nome}`);
+                        sendLog(`       📖 Buscando: ${secao.nome}`);
                         await page.goto(secao.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
                         await sleep(1500);
 
