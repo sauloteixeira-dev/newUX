@@ -42,6 +42,11 @@ const CourseView = ({ curso }) => {
         <div className="course-header-info">
           <h2>{curso.name}</h2>
           {curso.progresso && <span className="progresso-badge">{curso.progresso}</span>}
+          {curso.professor && (
+            <a href={curso.professor.link || '#'} target="_blank" rel="noopener noreferrer" className="professor-badge">
+              👨‍🏫 {curso.professor.nome}
+            </a>
+          )}
         </div>
         <a href={curso.url} target="_blank" rel="noopener noreferrer" className="btn-moodle">
           Acessar no Moodle ↗

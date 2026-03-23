@@ -22,7 +22,6 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user, isOpen, onClose
               className={`nav-item ${curso.id === activeCourseId ? 'active' : ''}`}
               onClick={() => onSelectCourse(curso.id)}
             >
-              <div className="curso-bullet"></div>
               <div className="curso-info">
                 <span className="curso-nome" title={curso.name}>{curso.name}</span>
                 <div className="curso-progresso-mini-bg">

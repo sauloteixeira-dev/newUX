@@ -90,18 +90,7 @@
   box-shadow: inset 3px 0 0 var(--primary);
 }
 
-.curso-bullet {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--border-color);
-  flex-shrink: 0;
-  transition: background-color 0.2s;
-}
 
-.nav-item.active .curso-bullet {
-  background-color: var(--primary);
-}
 
 .curso-info {
   flex: 1;
