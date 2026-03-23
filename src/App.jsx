@@ -110,6 +110,8 @@ function App() {
     setCursos([]);
     setActiveCourseId(null);
     localStorage.removeItem('lms_session');
+    localStorage.removeItem('lms_last_sync'); // reinicia o contador de sync
+    hasSynced.current = false;
   };
 
   if (!isAuthenticated) {
