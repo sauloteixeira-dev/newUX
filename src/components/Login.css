@@ -41,14 +41,14 @@
 
 .login-header h1 {
   margin: 0 0 8px 0;
-  font-size: 1.6rem;
+  font-size: var(--text-2xl);
   color: var(--text-main);
 }
 
 .login-header p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .login-error {
@@ -57,7 +57,7 @@
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 24px;
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   border: 1px solid rgba(239, 68, 68, 0.3);
   text-align: center;
 }
@@ -75,7 +75,7 @@
 }
 
 .form-group label {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-main);
 }
@@ -86,7 +86,7 @@
   border: 1px solid var(--border-color);
   background: var(--bg-main);
   color: var(--text-main);
-  font-size: 1rem;
+  font-size: var(--text-md);
   transition: all 0.2s;
   outline: none;
 }
@@ -109,7 +109,7 @@
   border: none;
   padding: 14px;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -146,7 +146,7 @@
 
 .loading-info {
   margin-top: 20px;
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-align: center;
   line-height: 1.4;
@@ -170,7 +170,7 @@
 
 /* -- Streaming loader -- */
 .loading-log-msg {
-  font-size: 0.8rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-align: center;
   min-height: 1.4em;

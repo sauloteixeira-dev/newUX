@@ -32,12 +32,12 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
 }
 
 .logo-container h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   color: var(--text-main);
   font-weight: 700;
   line-height: 1.2;
@@ -51,7 +51,7 @@
 
 .nav-title {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
@@ -99,7 +99,7 @@
 }
 
 .curso-nome {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   color: var(--text-main);
   font-weight: 500;
   white-space: normal;
@@ -147,7 +147,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: var(--text-base);
 }
 
 .user-details {
@@ -156,13 +156,13 @@
 }
 
 .user-name {
-  font-size: 0.85rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-main);
 }
 
 .user-matricula {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 

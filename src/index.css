@@ -1,21 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700&display=swap');
+
+/* ─── Escala Tipográfica Desktop ─── */
 :root {
   font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  --bg-main: #f8fafc;
-  --bg-surface: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --border-color: #cbd5e1;
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --sidebar-bg: #1e293b;
-  --sidebar-text: #f8fafc;
+  /* Tamanhos de texto — Desktop */
+  --text-xs:    0.72rem;   /* ~11.5px – labels, badges    */
+  --text-sm:    0.82rem;   /* ~13px   – textos auxiliares */
+  --text-base:  0.9rem;    /* ~14.5px – corpo padrão      */
+  --text-md:    1rem;      /* ~16px   – itens de lista    */
+  --text-lg:    1.15rem;   /* ~18px   – subtítulos        */
+  --text-xl:    1.35rem;   /* ~21.5px – títulos de seção  */
+  --text-2xl:   1.6rem;    /* ~25.5px – títulos de página */
+  --text-3xl:   2rem;      /* ~32px   – heading principal */
+
+  /* Cores — Light mode */
+  --bg-main:        #f8fafc;
+  --bg-surface:     #ffffff;
+  --bg-card:        #f1f5f9;
+  --text-main:      #0f172a;
+  --text-muted:     #475569;
+  --border-color:   #cbd5e1;
+  --primary:        #2563eb;
+  --primary-hover:  #1d4ed8;
+  --sidebar-bg:     #1e293b;
+  --sidebar-text:   #f8fafc;
 
   color-scheme: light;
   color: var(--text-main);
   background-color: var(--bg-main);
+  font-size: var(--text-base);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -23,16 +39,32 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ─── Escala Tipográfica Mobile (menor que 900px) ─── */
+@media (max-width: 900px) {
+  :root {
+    --text-xs:    0.68rem;
+    --text-sm:    0.78rem;
+    --text-base:  0.85rem;
+    --text-md:    0.95rem;
+    --text-lg:    1.05rem;
+    --text-xl:    1.2rem;
+    --text-2xl:   1.4rem;
+    --text-3xl:   1.75rem;
+  }
+}
+
+/* ─── Dark Mode ─── */
 body.dark {
-  --bg-main: #0f172a;
-  --bg-surface: #1e293b;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --border-color: #334155;
-  --primary: #3b82f6;
+  --bg-main:       #0f172a;
+  --bg-surface:    #1e293b;
+  --bg-card:       #1e293b;
+  --text-main:     #f8fafc;
+  --text-muted:    #94a3b8;
+  --border-color:  #334155;
+  --primary:       #3b82f6;
   --primary-hover: #60a5fa;
-  --sidebar-bg: #020617;
-  --sidebar-text: #f8fafc;
+  --sidebar-bg:    #020617;
+  --sidebar-text:  #f8fafc;
   color-scheme: dark;
 }
 
@@ -45,6 +77,22 @@ body {
   min-height: 100vh;
 }
 
+h1 { font-size: var(--text-3xl); }
+h2 { font-size: var(--text-2xl); }
+h3 { font-size: var(--text-xl); }
+h4 { font-size: var(--text-lg); }
+h5, h6 { font-size: var(--text-md); }
+
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+  margin: 0;
+  line-height: 1.25;
+}
+
+p, span, label, li, a {
+  font-size: var(--text-base);
+}
+
+small {
+  font-size: var(--text-xs);
 }

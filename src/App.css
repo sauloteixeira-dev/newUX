@@ -44,11 +44,11 @@
 .auth-header span.user-greeting {
   font-weight: 600;
   color: var(--text-main);
-  font-size: 0.95rem;
+  font-size: var(--text-md);
 }
 
 .sync-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-sm);
   background: rgba(37, 99, 235, 0.15);
   color: var(--primary);
   border: 1px solid rgba(37, 99, 235, 0.3);
