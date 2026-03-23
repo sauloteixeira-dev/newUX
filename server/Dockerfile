@@ -1,19 +1,17 @@
 FROM ghcr.io/puppeteer/puppeteer:latest
 
-# Define as variáveis de ambiente necessárias para o Puppeteer rodar no container
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 WORKDIR /usr/src/app
 
-# Copia os arquivos de dependência
-COPY package*.json ./
+# Copia os arquivos de dependência com permissão correta
+COPY --chown=pptruser:pptruser package*.json ./
 
-# Instala as dependências (ignorando o download do Chromium pq a imagem base já tem)
+# Instala as dependências
 RUN npm ci
 
 # Copia o restante do código
-COPY . .
+COPY --chown=pptruser:pptruser . .
 
 # Expõe a porta que o serviço usará
 EXPOSE 3001
