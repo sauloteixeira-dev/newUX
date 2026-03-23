@@ -5,7 +5,7 @@ const Login = ({ onLoginSuccess }) => {
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
   const [error, setError] = useState('');
 
   const handleLogin = async (e) => {
@@ -14,13 +14,10 @@ const Login = ({ onLoginSuccess }) => {
 
     setLoading(true);
     setError('');
-    setProgress(0);
+    setElapsedTime(0);
 
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 92) return 92;
-        return prev + Math.floor(Math.random() * 5) + 1;
-      });
+    const timerInterval = setInterval(() => {
+      setElapsedTime(prev => prev + 1);
     }, 1000);
 
     try {
@@ -31,15 +28,14 @@ const Login = ({ onLoginSuccess }) => {
       });
 
       if (!response.ok) {
-        clearInterval(progressInterval);
+        clearInterval(timerInterval);
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.error || 'Falha ao autenticar.');
       }
 
       const data = await response.json();
       
-      clearInterval(progressInterval);
-      setProgress(100);
+      clearInterval(timerInterval);
       
       setTimeout(() => {
         const coursesArray = data.data || data; // Extraindo a lista final
@@ -47,7 +43,7 @@ const Login = ({ onLoginSuccess }) => {
         onLoginSuccess(coursesArray, { matricula, nome: userNameInfo });
       }, 500);
     } catch (err) {
-      clearInterval(progressInterval);
+      clearInterval(timerInterval);
       setError(err.message || 'Erro ao comunicar com o servidor. O backend está rodando?');
       setLoading(false);
     }
@@ -104,11 +100,21 @@ const Login = ({ onLoginSuccess }) => {
         
         {loading && (
           <div className="loading-container" style={{ marginTop: '20px' }}>
-            <p className="loading-info" style={{ marginBottom: '8px' }}>Nosso robô está nos bastidores puxando as disciplinas...</p>
-            <div style={{ width: '100%', backgroundColor: '#edf2f7', borderRadius: '8px', height: '12px', overflow: 'hidden' }}>
-              <div style={{ width: `${progress}%`, backgroundColor: '#4fd1c5', height: '100%', transition: 'width 0.5s ease-out' }}></div>
+            <p className="loading-info" style={{ marginBottom: '8px', fontSize: '14px', color: '#4a5568' }}>
+              Nosso robô está nos bastidores mapeando as disciplinas...
+            </p>
+            <div style={{ width: '100%', backgroundColor: '#edf2f7', borderRadius: '8px', height: '14px', overflow: 'hidden', position: 'relative' }}>
+              <div style={{ 
+                width: `${Math.min(99, Math.floor(100 - (100 / (1 + elapsedTime * 0.05))))}%`, 
+                backgroundColor: '#4fd1c5', 
+                height: '100%', 
+                transition: 'width 1s linear' 
+              }}></div>
             </div>
-            <span style={{ fontSize: '13px', color: '#718096', display: 'block', textAlign: 'center', marginTop: '8px', fontWeight: 'bold' }}>{progress}% Scraped</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '13px', fontWeight: 'bold' }}>
+              <span style={{ color: '#2b6cb0' }}>⏱️ Tempo: {elapsedTime}s</span>
+              <span style={{ color: '#718096' }}>Raspando o Moodle...</span>
+            </div>
           </div>
         )}
       </div>
