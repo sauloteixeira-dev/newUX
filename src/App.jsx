@@ -43,6 +43,7 @@ function App() {
         cursos={cursos} 
         activeCourseId={activeCourseId} 
         onSelectCourse={setActiveCourseId} 
+        user={user}
       />
       <main className="lms-main-content">
         <header className="auth-header">

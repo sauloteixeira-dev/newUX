@@ -113,8 +113,24 @@ app.post('/api/login', async (req, res) => {
             throw new Error('O SSO falhou — o Moodle não reconheceu a sessão do Portal. Tente novamente.');
         }
 
-        // ─── ETAPA 4: Raspar lista de cursos ────────────────────────────────────
-        console.log('[4/5] 🎓 Extraindo lista de matérias...');
+        // ─── ETAPA 4: Raspar lista de cursos e Nome do Aluno ────────────────────
+        console.log('[4/5] 🎓 Extraindo informações de usuário e matérias...');
+
+        // Tentar pegar o nome de usuário do Moodle
+        const nomeAluno = await page.evaluate(() => {
+            const nameEl = document.querySelector('.usertext, .logininfo a, .userbutton .usertext');
+            if (nameEl) return nameEl.textContent.replace(/\s+/g, ' ').trim();
+            
+            const loginInfo = document.querySelector('.logininfo');
+            if (loginInfo) {
+                const text = loginInfo.textContent.replace(/\s+/g, ' ');
+                const match = text.match(/Você acessou como\s+(.+?)\s*\(/i);
+                if (match) return match[1].trim();
+            }
+            return '';
+        });
+        
+        console.log(`[4/5] 👤 Aluno identificado: ${nomeAluno || 'Nome não encontrado no header'}`);
 
         // Aguarda cards carregarem (são renderizados via JS)
         await page.waitForSelector('[data-region="course-content"], .course-summaryitem, .course-listitem', {
@@ -347,7 +363,7 @@ app.post('/api/login', async (req, res) => {
         await browser.close();
         console.log(`\n[🎉] Raspagem concluída! ${courses.length} matérias enviadas ao frontend.\n`);
 
-        res.json({ success: true, matricula, data: courses });
+        res.json({ success: true, matricula, nome: nomeAluno || 'Aluno UNIFENAS', data: courses });
 
     } catch (error) {
         console.error(`\n[❌] Erro crítico: ${error.message}`);

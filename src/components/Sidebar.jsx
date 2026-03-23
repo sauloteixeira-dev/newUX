@@ -1,7 +1,7 @@
 import React from 'react';
 import './Sidebar.css';
 
-const Sidebar = ({ cursos, activeCourseId, onSelectCourse }) => {
+const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user }) => {
   return (
     <aside className="lms-sidebar">
       <div className="sidebar-header">
@@ -40,10 +40,10 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse }) => {
 
       <div className="sidebar-footer">
         <div className="user-profile-mini">
-          <div className="avatar-mini">AL</div>
+          <div className="avatar-mini">{user?.nome ? user.nome.substring(0, 2).toUpperCase() : 'AL'}</div>
           <div className="user-details">
-            <span className="user-name">Aluno UNIFENAS</span>
-            <span className="user-matricula">Portal do Aluno</span>
+            <span className="user-name">{user?.nome || 'Aluno UNIFENAS'}</span>
+            <span className="user-matricula">{user?.matricula ? `Matrícula: ${user.matricula}` : 'Portal do Aluno'}</span>
           </div>
         </div>
       </div>
