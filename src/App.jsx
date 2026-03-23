@@ -18,7 +18,12 @@ function App() {
     const saved = localStorage.getItem('lms_session');
     return saved ? JSON.parse(saved).cursos : [];
   });
-  const [activeCourseId, setActiveCourseId] = useState(null);
+  const [activeCourseId, setActiveCourseId] = useState(() => {
+    const saved = localStorage.getItem('lms_session');
+    if (!saved) return null;
+    const { cursos } = JSON.parse(saved);
+    return cursos && cursos.length > 0 ? cursos[0].id : null;
+  });
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('lms_theme') || 'dark';
   });
