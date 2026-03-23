@@ -1,9 +1,11 @@
 import React from 'react';
 import './Sidebar.css';
 
-const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user }) => {
+const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user, isOpen, onClose }) => {
   return (
-    <aside className="lms-sidebar">
+    <>
+    {isOpen && <div className="sidebar-overlay" onClick={onClose}></div>}
+    <aside className={`lms-sidebar ${isOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-header">
         <div className="logo-container">
           <div className="logo-icon">UN</div>
@@ -48,6 +50,7 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user }) => {
         </div>
       </div>
     </aside>
+    </>
   );
 };
 

@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  background: #f7f8fc;
+  background: var(--bg-main);
 }
 
 /* ── Header ── */
@@ -14,26 +14,26 @@
   flex-wrap: wrap;
   gap: 12px;
   padding: 18px 24px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 10;
 }
 .course-header-info { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.course-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: #1a1a2e; }
+.course-header h2 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-main); }
 
 .progresso-badge {
   font-size: 0.72rem;
-  background: #e0f2fe;
-  color: #0369a1;
+  background: rgba(14, 165, 233, 0.2);
+  color: var(--primary);
   border-radius: 999px;
   padding: 3px 10px;
   font-weight: 700;
 }
 
 .btn-moodle {
-  background: #0056b3;
+  background: var(--primary);
   color: #fff;
   padding: 7px 15px;
   border-radius: 8px;
@@ -43,7 +43,7 @@
   white-space: nowrap;
   transition: background 0.2s;
 }
-.btn-moodle:hover { background: #003d82; }
+.btn-moodle:hover { background: var(--primary-hover); }
 
 /* ── Content Area ── */
 .course-content {
@@ -55,15 +55,15 @@
 
 /* ── Card de Seção ── */
 .secao-card {
-  background: #fff;
+  background: var(--bg-surface);
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-color);
   overflow: hidden;
   transition: box-shadow 0.2s;
 }
-.secao-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
-.secao-card.locked { background: #f9fafb; opacity: 0.78; }
-.secao-card.aberta { border-color: #0056b3; }
+.secao-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+.secao-card.locked { opacity: 0.6; }
+.secao-card.aberta { border-color: var(--primary); }
 
 /* ── Botão Toggle da Seção ── */
 .secao-toggle {
@@ -79,7 +79,7 @@
   transition: background 0.15s;
   gap: 10px;
 }
-.secao-toggle:hover:not(:disabled) { background: #f0f7ff; }
+.secao-toggle:hover:not(:disabled) { background: rgba(125, 211, 252, 0.1); }
 .secao-toggle:disabled { cursor: default; }
 
 .secao-toggle-left {
@@ -89,16 +89,16 @@
 }
 .secao-chevron {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-muted);
   min-width: 16px;
   transition: transform 0.2s;
 }
 .secao-nome {
   font-size: 0.93rem;
   font-weight: 700;
-  color: #1e3a8a;
+  color: var(--primary);
 }
-.secao-card.locked .secao-nome { color: #6b7280; }
+.secao-card.locked .secao-nome { color: var(--text-muted); }
 
 .secao-toggle-right {
   display: flex;
@@ -108,16 +108,16 @@
 }
 .progresso-secao {
   font-size: 0.7rem;
-  color: #16a34a;
+  color: #22c55e;
   font-weight: 700;
-  background: #f0fdf4;
+  background: rgba(34, 197, 94, 0.15);
   border-radius: 999px;
   padding: 2px 9px;
 }
 .badge-qtd {
   font-size: 0.7rem;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--text-muted);
+  background: var(--bg-main);
   border-radius: 999px;
   padding: 2px 9px;
   font-weight: 600;
@@ -126,7 +126,7 @@
 /* ── Info de disponibilidade (seções bloqueadas) ── */
 .disponibilidade-info {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   padding: 2px 16px 12px 42px;
   margin: 0;
   font-style: italic;
@@ -135,7 +135,7 @@
 
 /* ── Lista de Atividades ── */
 .atividades-lista {
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
 }
@@ -147,22 +147,22 @@
   padding: 11px 16px 11px 42px;
   text-decoration: none;
   color: inherit;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--bg-main);
   transition: background 0.12s;
 }
 .atividade-item:last-child { border-bottom: none; }
-.atividade-item:hover { background: #f0f7ff; }
+.atividade-item:hover { background: rgba(125, 211, 252, 0.1); }
 
 .atividade-emoji { font-size: 1.1rem; min-width: 24px; text-align: center; }
 .atividade-nome {
   flex: 1;
   font-size: 0.88rem;
-  color: #374151;
+  color: var(--text-main);
   font-weight: 500;
 }
 .atividade-tipo {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
@@ -172,7 +172,7 @@
 .sem-atividades {
   padding: 14px 16px 14px 42px;
   font-size: 0.82rem;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -180,10 +180,10 @@
 .empty-aulas {
   text-align: center;
   padding: 40px 24px;
-  color: #9ca3af;
-  background: #fff;
+  color: var(--text-muted);
+  background: var(--bg-surface);
   border-radius: 12px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--border-color);
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -2,7 +2,8 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background-color: #f8fafc;
+  background-color: var(--bg-main);
+  color: var(--text-main);
 }
 
 .lms-main-content {
@@ -13,6 +14,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: margin-left 0.3s ease, width 0.3s ease;
 }
 
 .empty-state {
@@ -20,7 +22,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 1.2rem;
   font-weight: 500;
 }
@@ -28,18 +30,46 @@
 /* Header de navegação/logout do App Principal */
 .auth-header {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
   gap: 16px;
   padding: 16px 32px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.auth-header span {
+.header-spacer {
+  flex: 1;
+}
+
+.auth-header span.user-greeting {
   font-weight: 600;
-  color: #334155;
+  color: var(--text-main);
   font-size: 0.95rem;
+}
+
+.btn-mobile-menu {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-theme {
+  background: transparent;
+  border: 1px solid transparent;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.btn-theme:hover {
+  background: var(--border-color);
 }
 
 .btn-logout {
@@ -60,10 +90,43 @@
 /* Responsividade básica */
 @media (max-width: 900px) {
   .lms-sidebar {
-    width: 240px;
+    position: fixed;
+    top: 0;
+    left: -280px;
+    height: 100vh;
+    z-index: 50;
+    transition: left 0.3s ease;
   }
+  
+  .lms-sidebar.sidebar-open {
+    left: 0;
+  }
+  
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 40;
+  }
+
   .lms-main-content {
-    margin-left: 240px;
-    width: calc(100% - 240px);
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .btn-mobile-menu {
+    display: flex;
+  }
+  
+  .auth-header {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .user-greeting {
+    display: none;
   }
 }

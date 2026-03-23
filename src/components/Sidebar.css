@@ -1,7 +1,7 @@
 .lms-sidebar {
   width: 280px;
-  background-color: #ffffff;
-  border-right: 1px solid #e2e8f0;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -13,7 +13,7 @@
 
 .sidebar-header {
   padding: 24px 20px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .logo-container {
@@ -38,7 +38,7 @@
 .logo-container h2 {
   margin: 0;
   font-size: 1.1rem;
-  color: #0f172a;
+  color: var(--text-main);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -54,7 +54,7 @@
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #64748b;
+  color: var(--text-muted);
   font-weight: 700;
   margin-bottom: 12px;
   padding-left: 8px;
@@ -81,26 +81,26 @@
 }
 
 .nav-item:hover {
-  background-color: #f8fafc;
+  background-color: var(--bg-main);
 }
 
 .nav-item.active {
-  background-color: #eff6ff;
-  border-color: #bfdbfe;
+  background-color: var(--primary);
+  border-color: var(--primary-hover);
 }
 
 .curso-bullet {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #cbd5e1;
+  background-color: var(--border-color);
   flex-shrink: 0;
   transition: background-color 0.2s;
 }
 
 .nav-item.active .curso-bullet {
-  background-color: #0056b3;
-  box-shadow: 0 0 0 3px #dbeafe;
+  background-color: #fff;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
 }
 
 .curso-info {
@@ -113,7 +113,7 @@
 
 .curso-nome {
   font-size: 0.85rem;
-  color: #334155;
+  color: var(--text-main);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -122,12 +122,12 @@
 }
 
 .nav-item.active .curso-nome {
-  color: #002855;
+  color: #fff;
 }
 
 .curso-progresso-mini-bg {
   height: 4px;
-  background-color: #e2e8f0;
+  background-color: var(--border-color);
   border-radius: 2px;
   width: 100%;
   overflow: hidden;
@@ -141,8 +141,8 @@
 
 .sidebar-footer {
   padding: 20px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-surface);
 }
 
 .user-profile-mini {
@@ -152,8 +152,8 @@
 }
 
 .avatar-mini {
-  background-color: #cbd5e1;
-  color: #0f172a;
+  background-color: var(--primary);
+  color: #fff;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -172,15 +172,14 @@
 .user-name {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--text-main);
 }
 
 .user-matricula {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
-/* Scrollbar styling para a navegação */
 .cursos-nav::-webkit-scrollbar {
   width: 6px;
 }
@@ -190,6 +189,6 @@
 }
 
 .cursos-nav::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: var(--border-color);
   border-radius: 20px;
 }

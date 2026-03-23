@@ -3,14 +3,37 @@
   line-height: 1.5;
   font-weight: 400;
 
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --primary: #0ea5e9;
+  --primary-hover: #0284c7;
+  --sidebar-bg: #1e293b;
+  --sidebar-text: #f8fafc;
+
   color-scheme: light;
-  color: #0f172a;
-  background-color: #f1f5f9;
+  color: var(--text-main);
+  background-color: var(--bg-main);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body.dark {
+  --bg-main: #0f172a;
+  --bg-surface: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-color: #334155;
+  --primary: #38bdf8;
+  --primary-hover: #7dd3fc;
+  --sidebar-bg: #020617;
+  --sidebar-text: #f8fafc;
+  color-scheme: dark;
 }
 
 * {
