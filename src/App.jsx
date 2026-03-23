@@ -33,8 +33,18 @@ function App() {
 
   React.useEffect(() => {
     if (isAuthenticated && user && user.senha && !hasSynced.current) {
-      hasSynced.current = true;
-      performBackgroundSync(user.matricula, user.senha);
+      const SYNC_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+      const lastSync = parseInt(localStorage.getItem('lms_last_sync') || '0', 10);
+      const agora = Date.now();
+
+      if (agora - lastSync >= SYNC_INTERVAL_MS) {
+        hasSynced.current = true;
+        localStorage.setItem('lms_last_sync', String(agora));
+        performBackgroundSync(user.matricula, user.senha);
+      } else {
+        const restante = Math.round((SYNC_INTERVAL_MS - (agora - lastSync)) / 60000);
+        console.log(`[Sync] Próxima atualização em ~${restante} min(s). Usando cache.`);
+      }
     }
   }, [isAuthenticated, user]);
 
