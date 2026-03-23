@@ -69,8 +69,7 @@ app.post('/api/login', async (req, res) => {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--no-zygote',
-                '--single-process'
+                '--no-zygote'
             ]
         });
 
@@ -447,8 +446,7 @@ app.post('/api/sync-recent', async (req, res) => {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--no-first-run',
-                '--no-zygote',
-                '--single-process'
+                '--no-zygote'
             ]
         });
 
