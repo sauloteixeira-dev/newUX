@@ -5,21 +5,34 @@ import CourseView from './components/CourseView';
 import Login from './components/Login';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null);
-  const [cursos, setCursos] = useState([]);
+  // Inicializar com LocalStorage
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const saved = localStorage.getItem('lms_session');
+    return saved ? JSON.parse(saved).isAuthenticated : false;
+  });
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('lms_session');
+    return saved ? JSON.parse(saved).user : null;
+  });
+  const [cursos, setCursos] = useState(() => {
+    const saved = localStorage.getItem('lms_session');
+    return saved ? JSON.parse(saved).cursos : [];
+  });
   const [activeCourseId, setActiveCourseId] = useState(null);
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('lms_theme') || 'dark';
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   React.useEffect(() => {
     document.body.className = theme;
+    localStorage.setItem('lms_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const handleLoginSuccess = (cursosRaspados, userInfo) => {
-    // Calculando progresso fictício para manter a UI agradável (ou lendo progresso da API)
+    // Calculando progresso fictício (ou lendo progresso da API)
     const processedCursos = cursosRaspados.map(curso => ({
       ...curso,
       progresso: curso.progresso || 0
@@ -27,16 +40,26 @@ function App() {
 
     setCursos(processedCursos);
     setUser(userInfo);
+    setIsAuthenticated(true);
+    
     if (processedCursos.length > 0) {
       setActiveCourseId(processedCursos[0].id);
     }
-    setIsAuthenticated(true);
+    
+    // Salvar no storage
+    localStorage.setItem('lms_session', JSON.stringify({
+      isAuthenticated: true,
+      user: userInfo,
+      cursos: processedCursos
+    }));
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setUser(null);
     setCursos([]);
+    setActiveCourseId(null);
+    localStorage.removeItem('lms_session');
   };
 
   if (!isAuthenticated) {
