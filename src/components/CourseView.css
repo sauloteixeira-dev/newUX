@@ -25,7 +25,7 @@
 
 .progresso-badge {
   font-size: 0.72rem;
-  background: rgba(14, 165, 233, 0.2);
+  background: rgba(37, 99, 235, 0.15);
   color: var(--primary);
   border-radius: 999px;
   padding: 3px 10px;
@@ -62,7 +62,7 @@
   transition: box-shadow 0.2s;
 }
 .secao-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
-.secao-card.locked { opacity: 0.85; filter: brightness(0.95); }
+.secao-card.locked { opacity: 0.95; border-style: dashed; }
 .secao-card.aberta { border-color: var(--primary); }
 
 /* ── Botão Toggle da Seção ── */
@@ -116,8 +116,8 @@
 }
 .badge-qtd {
   font-size: 0.7rem;
-  color: var(--text-muted);
-  background: var(--bg-main);
+  color: var(--text-main);
+  background: var(--border-color);
   border-radius: 999px;
   padding: 2px 9px;
   font-weight: 600;

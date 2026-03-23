@@ -74,8 +74,8 @@
 
 .btn-logout {
   background: transparent;
-  color: var(--danger-text);
-  border: 1px solid var(--danger-border);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
@@ -84,7 +84,7 @@
 }
 
 .btn-logout:hover {
-  background: var(--danger-bg);
+  background: var(--bg-main);
 }
 
 /* Responsividade básica */
