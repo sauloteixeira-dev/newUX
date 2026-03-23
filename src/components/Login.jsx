@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import './Login.css';
 
 const Login = ({ onLoginSuccess }) => {
-  const [matricula, setMatricula] = useState('200859251');
-  const [senha, setSenha] = useState('11170059686');
+  const [matricula, setMatricula] = useState('');
+  const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');

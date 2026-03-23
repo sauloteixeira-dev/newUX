@@ -43,7 +43,7 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse }) => {
           <div className="avatar-mini">AL</div>
           <div className="user-details">
             <span className="user-name">Aluno UNIFENAS</span>
-            <span className="user-matricula">Matrícula: 200859251</span>
+            <span className="user-matricula">Portal do Aluno</span>
           </div>
         </div>
       </div>
