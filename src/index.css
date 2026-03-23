@@ -6,10 +6,13 @@
   --bg-main: #f8fafc;
   --bg-surface: #ffffff;
   --text-main: #0f172a;
-  --text-muted: #64748b;
+  --text-muted: #475569;
   --border-color: #e2e8f0;
-  --primary: #0ea5e9;
-  --primary-hover: #0284c7;
+  --primary: #0284c7;
+  --primary-hover: #0369a1;
+  --danger-text: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
   --sidebar-bg: #1e293b;
   --sidebar-text: #f8fafc;
 
@@ -27,10 +30,13 @@ body.dark {
   --bg-main: #0f172a;
   --bg-surface: #1e293b;
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  --text-muted: #cbd5e1;
   --border-color: #334155;
-  --primary: #38bdf8;
-  --primary-hover: #7dd3fc;
+  --primary: #0ea5e9;
+  --primary-hover: #38bdf8;
+  --danger-text: #fca5a5;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  --danger-border: rgba(239, 68, 68, 0.3);
   --sidebar-bg: #020617;
   --sidebar-text: #f8fafc;
   color-scheme: dark;

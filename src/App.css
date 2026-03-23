@@ -74,8 +74,8 @@
 
 .btn-logout {
   background: transparent;
-  color: #991b1b;
-  border: 1px solid #fecaca;
+  color: var(--danger-text);
+  border: 1px solid var(--danger-border);
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
@@ -84,24 +84,11 @@
 }
 
 .btn-logout:hover {
-  background: #fef2f2;
+  background: var(--danger-bg);
 }
 
 /* Responsividade básica */
 @media (max-width: 900px) {
-  .lms-sidebar {
-    position: fixed;
-    top: 0;
-    left: -280px;
-    height: 100vh;
-    z-index: 50;
-    transition: left 0.3s ease;
-  }
-  
-  .lms-sidebar.sidebar-open {
-    left: 0;
-  }
-  
   .sidebar-overlay {
     position: fixed;
     top: 0;
