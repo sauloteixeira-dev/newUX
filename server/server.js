@@ -263,15 +263,14 @@ app.post('/api/login', async (req, res) => {
                     secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: atividadesPre });
                 });
 
-                // ─── Para cada seção: HTTP direto + cheerio ─────────────────
+                // ─── Para cada seção: processamento e puppeteer bypass ──────
                 for (const secao of secoes) {
                     if (secao.locked) continue;
-                    
-                    let atividades = secao.atividades; // Usa atividades já baixadas do DOM principal
-                    
-                    // Somente faz requisição extra se ESTA seção não veio pré-carregada E tiver URL externa real
-                    if (atividades.length === 0 && secao.url && secao.url.includes('&section=')) {
-                        try {
+                    try {
+                        let atividades = secao.atividades; // Usa as do DOM
+                        
+                        // Busca do link só se não tiver e se for uma página separada
+                        if (atividades.length === 0 && secao.url && secao.url.includes('&section=')) {
                             sendLog(`       📖 Buscando sub-seção: ${secao.nome}`);
                             const $s = await getHtml(secao.url);
                             $s('li.activity[id^="module-"]').each((_, act) => {
@@ -299,16 +298,10 @@ app.post('/api/login', async (req, res) => {
                                 else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
                                 if (nome) atividades.push({ nome, url: actLink.attr('href'), tipo });
                             });
-                        } catch (e) {
-                            sendLog(`         ✗ Erro na sub-seção "${secao.nome}": ${e.message}`);
+                            if (atividades.length > 0) {
+                                sendLog(`         ✓ ${atividades.length} atividades pré-carregadas em ${secao.nome}`);
+                            }
                         }
-                    }
-
-                    if (atividades.length > 0) {
-                        secao.atividades = atividades;
-                        sendLog(`         ✓ ${atividades.length} atividades pré-carregadas em ${secao.nome}`);
-                    }
-                }
 
                         // ─── BYPASS via Puppeteer (necessário para JS) ──────
                         const processBypass = async (atv) => {
@@ -379,7 +372,9 @@ app.post('/api/login', async (req, res) => {
                         }
 
                         secao.atividades = atividades;
+                        // LOG SEÇÃO
                         sendLog(`         ✓ ${atividades.length} atividades processadas`);
+
                     } catch (e) {
                         sendLog(`         ✗ Erro na seção "${secao.nome}": ${e.message}`);
                     }
