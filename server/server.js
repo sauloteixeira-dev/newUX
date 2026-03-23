@@ -27,13 +27,25 @@ const blockAssets = async (page) => {
 app.post('/api/login', async (req, res) => {
     const { matricula, senha } = req.body;
 
+    // Configura streaming de resposta (NDJSON)
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.flushHeaders();
+
+    const sendLog = (msg) => {
+        console.log(msg);
+        try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) {}
+    };
+
     if (!matricula || !senha) {
-        return res.status(400).json({ success: false, error: 'Matrícula e Senha são obrigatórios' });
+        res.write(JSON.stringify({ type: 'error', error: 'Matrícula e Senha são obrigatórios' }) + '\n');
+        return res.end();
     }
 
     let browser;
     try {
-        console.log(`\n[🚀] Iniciando robô para a matrícula: ${matricula}`);
+        sendLog(`[🚀] Iniciando robô para a matrícula: ${matricula}`);
 
         browser = await puppeteer.launch({
             headless: 'new',
@@ -46,7 +58,7 @@ app.post('/api/login', async (req, res) => {
         await blockAssets(page); // 🚀 Ativa modo turbo
 
         // ─── ETAPA 1: Login no Portal do Aluno ───────────────────────────────────
-        console.log('[1/5] 🌐 Abrindo o Portal do Aluno...');
+        sendLog('[1/5] 🌐 Abrindo o Portal do Aluno...');
         await page.goto('https://aluno.unifenas.br/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
         // Preenche matrícula
@@ -59,9 +71,8 @@ app.post('/api/login', async (req, res) => {
         await page.click('#password', { clickCount: 3 });
         await page.type('#password', senha, { delay: 50 });
 
-        console.log('[1/5] 🔑 Credenciais preenchidas. Clicando em Entrar...');
+        sendLog('[1/5] 🔑 Credenciais preenchidas. Clicando em Entrar...');
 
-        // Clica no botão Entrar e aguarda SEM esperar navigation (é SPA)
         const btnEntrar = await page.$('button[type="submit"]');
         if (btnEntrar) {
             await btnEntrar.click();
@@ -69,8 +80,7 @@ app.post('/api/login', async (req, res) => {
             await page.keyboard.press('Enter');
         }
 
-        // Portal EAD usa SPA/Vue — aguardamos URL mudar ou o painel aparecer
-        console.log('[1/5] ⏳ Aguardando autenticação do Portal (até 15s)...');
+        sendLog('[1/5] ⏳ Aguardando autenticação do Portal...');
         await Promise.race([
             page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
             sleep(15000)
@@ -78,13 +88,11 @@ app.post('/api/login', async (req, res) => {
         await sleep(4000); // extra para cookies SSO
 
         const urlAposLogin = page.url();
-        console.log(`[1/5] ✓ URL após login: ${urlAposLogin}`);
+        sendLog(`[1/5] ✓ Autenticado no Portal!`);
 
-        // Verificar se ainda está na tela de login (falha)
         const aindaNoLogin = urlAposLogin.includes('/login') || urlAposLogin === 'https://aluno.unifenas.br/';
         const campoAindaVisivel = await page.$('#username');
         if (aindaNoLogin && campoAindaVisivel) {
-            // Verifica se tem mensagem de erro
             const errMsg = await page.evaluate(() => {
                 const e = document.querySelector('.alert, .error, .invalid-feedback, [class*="error"]');
                 return e ? e.textContent.trim() : '';
@@ -93,34 +101,28 @@ app.post('/api/login', async (req, res) => {
         }
 
         // ─── ETAPA 2: Navegar para auto-login-moodle ────────────────────────────
-        console.log('[2/5] 🔄 Navegando para auto-login-moodle...');
+        sendLog('[2/5] 🔄 Conectando ao AVA Moodle via SSO...');
         await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
-        await sleep(5000); // espera SSO configurar cookies do Moodle
+        await sleep(5000);
 
-        const urlAposMoodle = page.url();
-        console.log(`[2/5] ✓ URL após auto-login-moodle: ${urlAposMoodle}`);
+        sendLog(`[2/5] ✓ Sessão Moodle ativa!`);
 
         // ─── ETAPA 3: Acessar Meus Cursos diretamente ──────────────────────────
-        console.log('[3/5] 📚 Acessando Meus Cursos no AVA Moodle...');
+        sendLog('[3/5] 📚 Buscando suas matérias no AVA...');
         await page.goto('https://ava.unifenas.br/my/courses.php', { waitUntil: 'domcontentloaded', timeout: 60000 });
         await sleep(3000);
 
         const urlMoodle = page.url();
-        console.log(`[3/5] URL do Moodle: ${urlMoodle}`);
-
-        // Se redirecionou para login do Moodle, o SSO falhou
         if (urlMoodle.includes('/login/index.php')) {
             throw new Error('O SSO falhou — o Moodle não reconheceu a sessão do Portal. Tente novamente.');
         }
 
         // ─── ETAPA 4: Raspar lista de cursos e Nome do Aluno ────────────────────
-        console.log('[4/5] 🎓 Extraindo informações de usuário e matérias...');
+        sendLog('[4/5] 🎓 Extraindo informações de usuário e matérias...');
 
-        // Tentar pegar o nome de usuário do Moodle
         const nomeAluno = await page.evaluate(() => {
             const nameEl = document.querySelector('.usertext, .logininfo a, .userbutton .usertext');
             if (nameEl) return nameEl.textContent.replace(/\s+/g, ' ').trim();
-            
             const loginInfo = document.querySelector('.logininfo');
             if (loginInfo) {
                 const text = loginInfo.textContent.replace(/\s+/g, ' ');
@@ -129,28 +131,23 @@ app.post('/api/login', async (req, res) => {
             }
             return '';
         });
-        
-        console.log(`[4/5] 👤 Aluno identificado: ${nomeAluno || 'Nome não encontrado no header'}`);
 
-        // Aguarda cards carregarem (são renderizados via JS)
+        sendLog(`[4/5] 👤 Aluno: ${nomeAluno || 'identificado'}`);
+
         await page.waitForSelector('[data-region="course-content"], .course-summaryitem, .course-listitem', {
             timeout: 20000
-        }).catch(() => console.log('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
+        }).catch(() => sendLog('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
         await sleep(2000);
 
         const courses = await page.evaluate(() => {
-            // Seletor principal dos items de curso na página my/courses.php
             const items = Array.from(document.querySelectorAll(
                 '[data-region="course-content"][data-course-id], .course-summaryitem[data-region="course-content"]'
             ));
-
             return items.map(item => {
                 const courseId = item.getAttribute('data-course-id');
-                // Link com nome do curso — classe aalink e coursename
                 const linkEl = item.querySelector('a.coursename, a.aalink.coursename');
                 let name = '';
                 if (linkEl) {
-                    // Filtra textos ocultos visually-hidden
                     name = Array.from(linkEl.childNodes)
                         .filter(n => {
                             if (n.nodeType === 3) return n.textContent.trim().length > 0;
@@ -161,17 +158,12 @@ app.post('/api/login', async (req, res) => {
                         .join(' ')
                         .trim();
                     if (!name) name = linkEl.textContent.replace(/\s+/g, ' ').trim();
-                    // Limpa prefixos de acessibilidade do Moodle
                     name = name.replace(/^Curso é favorito\s*/i, '').trim();
                 }
-
                 const url = linkEl ? linkEl.href : `https://ava.unifenas.br/course/view.php?id=${courseId}`;
-
-                // Progresso
                 const progressEl = item.querySelector('.progress-bar');
                 const progresso = progressEl ? (progressEl.getAttribute('aria-valuenow') || '').trim() : '';
                 const progressoTexto = progressEl ? `${progresso}% completo` : '';
-
                 return { id: courseId, name: name.replace(/\s+/g, ' ').trim(), url, progresso: progressoTexto, secoes: [] };
             }).filter(c => c.name && c.name.length > 2);
         });
@@ -180,69 +172,47 @@ app.post('/api/login', async (req, res) => {
             throw new Error('Nenhuma matéria encontrada em "Meus Cursos". O login pode ter falhado silenciosamente.');
         }
 
-        console.log(`[4/5] ✅ ${courses.length} matérias encontradas!`);
+        sendLog(`[4/5] ✅ ${courses.length} matérias encontradas!`);
 
         // ─── ETAPA 5: Para cada curso, raspar as seções ──────────────────────────
-        console.log('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
+        sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
 
         for (const curso of courses) {
-            console.log(`  → ${curso.name}`);
+            sendLog(`  → Acessando: ${curso.name}`);
             try {
                 await page.goto(curso.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
                 await sleep(2000);
 
                 const professor = await page.evaluate(() => {
-                    // 1. Selector exato fornecido pelo usuario: a.view-user-profile-link com title
                     const exactLink = document.querySelector('a.view-user-profile-link');
                     if (exactLink && exactLink.title) {
                         return { nome: exactLink.title.trim(), link: exactLink.href || '#' };
                     }
                     if (exactLink && exactLink.textContent) {
-                         return { nome: exactLink.textContent.trim(), link: exactLink.href };
+                        return { nome: exactLink.textContent.trim(), link: exactLink.href };
                     }
-
-                    // Try exact contact structure common in Moodle: .contact, .teachers, .userpicture
                     const contactLink = document.querySelector('.block_course_contacts a[href*="message/"], .block_course_contacts a[href*="user/"]');
                     if (contactLink) {
                         return { nome: contactLink.textContent.trim(), link: contactLink.href };
                     }
-
-                    // Try all message/user links and find one containing Professor or Tutor
                     const msgLinks = Array.from(document.querySelectorAll('a[href*="message/index.php?id="], a[href*="user/view.php?id="]'));
                     for (const link of msgLinks) {
                         let txt = link.textContent.trim();
                         let parentTxt = link.parentElement ? link.parentElement.textContent : '';
-                        
-                        // We check if the link or its direct parent container explicitly mentions Professor
                         if (parentTxt.match(/Prof|Tutor/i) || txt.match(/Prof|Tutor/i)) {
                             let cleanName = txt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
                             if (!cleanName || cleanName.length < 3) cleanName = parentTxt.replace(/Prof\.|Professor[a]?/ig, '').replace(/Mensagem.*/i, '').trim();
                             return { nome: cleanName || 'Professor', link: link.href };
                         }
                     }
-
-                    // Look for any header/bold mentioning Professor
-                    const textElements = Array.from(document.querySelectorAll('h3, h4, h5, strong, b, span, p, div.no-overflow'));
-                    for (let el of textElements) {
-                        const t = el.textContent.trim();
-                        if (t.match(/Prof\.|Professor[a]?/i) && t.length > 4 && t.length < 80) {
-                            let clean = t.replace(/.*(?:Prof\.|Professor[a]?[s]?)\s*[\:\-]?/i, '').replace(/Mensagem.*/i, '').trim();
-                            if (!clean) continue;
-                            
-                            // Let's try to grab a nearby link
-                            let linkEl = el.closest('div, li, section')?.querySelector('a[href*="message"], a[href*="user"]');
-                            return { nome: clean || 'Professor', link: linkEl ? linkEl.href : '' };
-                        }
-                    }
                     return null;
                 });
-                
+
                 curso.professor = professor;
 
                 const secoes = await page.evaluate(() => {
                     const resultado = [];
                     const sectionItems = document.querySelectorAll('li.section.main[data-sectionid]');
-
                     sectionItems.forEach(section => {
                         const sectionNum = section.getAttribute('data-number');
                         const nameEl = section.querySelector('h2.sectionname');
@@ -250,15 +220,12 @@ app.post('/api/login', async (req, res) => {
                         const linkEl = section.querySelector('.section-header a');
                         const url = linkEl ? linkEl.href : '';
                         const locked = !!section.querySelector('.fa-lock');
-
                         let disponibilidade = '';
                         const availEl = section.querySelector('.availabilityinfo');
                         if (availEl) disponibilidade = availEl.textContent.replace(/\s+/g, ' ').trim().substring(0, 200);
-
                         const progressEl = section.querySelector('.progress-bar');
                         const progressText = section.querySelector('.progress-text span');
                         const progressoTexto = progressText ? progressText.textContent.trim() : (progressEl ? progressEl.style.width : '');
-
                         resultado.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: [] });
                     });
                     return resultado;
@@ -267,9 +234,8 @@ app.post('/api/login', async (req, res) => {
                 // Para cada seção desbloqueada com URL, buscar as atividades internas
                 for (const secao of secoes) {
                     if (secao.locked || !secao.url) continue;
-
                     try {
-                        console.log(`       📖 Raspando atividades de: ${secao.nome}...`);
+                        sendLog(`       📖 Raspando: ${secao.nome}`);
                         await page.goto(secao.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
                         await sleep(1500);
 
@@ -277,10 +243,8 @@ app.post('/api/login', async (req, res) => {
                             const lista = [];
                             document.querySelectorAll('li.activity[id^="module-"]').forEach(act => {
                                 if (act.classList.contains('modtype_label')) return;
-
                                 const actLink = act.querySelector('a[href*="mod/"], a[href*="course/"]');
                                 if (!actLink) return;
-
                                 let nome = '';
                                 const instanceNode = act.querySelector('.instancename');
                                 if (instanceNode) {
@@ -291,7 +255,6 @@ app.post('/api/login', async (req, res) => {
                                     if (!nome) nome = instanceNode.textContent.replace(/\s+/g, ' ').trim();
                                 }
                                 if (!nome) nome = actLink.textContent.replace(/\s+/g, ' ').trim();
-
                                 let tipo = 'Material';
                                 if (act.classList.contains('modtype_forum')) tipo = 'Fórum';
                                 else if (act.classList.contains('modtype_assign')) tipo = 'Tarefa';
@@ -301,7 +264,6 @@ app.post('/api/login', async (req, res) => {
                                 else if (act.classList.contains('modtype_page')) tipo = 'Página';
                                 else if (act.classList.contains('modtype_url')) tipo = 'Link Externo';
                                 else if (act.classList.contains('modtype_folder')) tipo = 'Pasta';
-
                                 if (nome) lista.push({ nome, url: actLink.href, tipo });
                             });
                             return lista;
@@ -312,24 +274,20 @@ app.post('/api/login', async (req, res) => {
                             if (atv.tipo !== 'Ferramenta externa' && atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
                             let actPage = null;
                             try {
-                                console.log(`           🔍 Buscando link de: ${atv.nome}`);
+                                sendLog(`           🔍 Buscando link de: ${atv.nome}`);
                                 actPage = await browser.newPage();
-                                await blockAssets(actPage); // 🚀
+                                await blockAssets(actPage);
                                 await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-                                
                                 await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-                                
                                 const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
                                 const hasForm = await actPage.$(formBtnSelector);
                                 let hasLink = false;
-                                
                                 if (!hasForm) {
-                                     hasLink = await actPage.evaluate(() => {
+                                    hasLink = await actPage.evaluate(() => {
                                         const links = Array.from(document.querySelectorAll('a'));
                                         return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
-                                     });
+                                    });
                                 }
-
                                 if (hasForm || hasLink) {
                                     const newPagePromise = new Promise(resolve => {
                                         browser.once('targetcreated', async target => {
@@ -339,7 +297,6 @@ app.post('/api/login', async (req, res) => {
                                             }
                                         });
                                     });
-
                                     if (hasForm) {
                                         await actPage.click(formBtnSelector);
                                     } else {
@@ -349,13 +306,11 @@ app.post('/api/login', async (req, res) => {
                                             if (targetLink) targetLink.click();
                                         });
                                     }
-
                                     const result = await Promise.race([
                                         newPagePromise,
                                         actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
                                         sleep(4000).then(() => null)
                                     ]);
-
                                     if (result && result.url() !== 'about:blank') {
                                         atv.url = result.url();
                                         if (result !== actPage) await result.close();
@@ -371,16 +326,15 @@ app.post('/api/login', async (req, res) => {
                                         }
                                     }
                                 } else {
-                                     const embedUrl = await actPage.evaluate(() => {
+                                    const embedUrl = await actPage.evaluate(() => {
                                         const embed = document.querySelector('iframe#resourceobject, object#resourceobject');
                                         return embed ? (embed.src || embed.data) : null;
                                     });
                                     if (embedUrl) atv.url = embedUrl;
                                 }
-                                
-                                if(actPage && !actPage.isClosed()) await actPage.close();
+                                if (actPage && !actPage.isClosed()) await actPage.close();
                             } catch (e) {
-                                if(actPage && !actPage.isClosed()) await actPage.close();
+                                if (actPage && !actPage.isClosed()) await actPage.close();
                             }
                         };
 
@@ -392,31 +346,33 @@ app.post('/api/login', async (req, res) => {
                         }
 
                         secao.atividades = atividades;
-                        console.log(`         ✓ ${atividades.length} atividades processadas`);
+                        sendLog(`         ✓ ${atividades.length} atividades processadas`);
                     } catch (e) {
-                        console.log(`         ✗ Erro ao raspar seção "${secao.nome}": ${e.message}`);
+                        sendLog(`         ✗ Erro ao raspar seção "${secao.nome}": ${e.message}`);
                     }
                 }
 
                 curso.secoes = secoes;
-                console.log(`     ✓ ${secoes.length} seções com atividades raspadas`);
+                sendLog(`     ✓ ${curso.name} concluída`);
 
             } catch (err) {
-                console.log(`     ✗ Erro ao raspar "${curso.name}": ${err.message}`);
+                sendLog(`     ✗ Erro ao raspar "${curso.name}": ${err.message}`);
                 curso.secoes = [];
                 curso.erro = err.message;
             }
         }
 
         await browser.close();
-        console.log(`\n[🎉] Raspagem concluída! ${courses.length} matérias enviadas ao frontend.\n`);
+        sendLog(`[🎉] Raspagem concluída! ${courses.length} matérias prontas.`);
 
-        res.json({ success: true, matricula, nome: nomeAluno || 'Aluno UNIFENAS', data: courses });
+        res.write(JSON.stringify({ type: 'success', matricula, nome: nomeAluno || 'Aluno UNIFENAS', data: courses }) + '\n');
+        res.end();
 
     } catch (error) {
         console.error(`\n[❌] Erro crítico: ${error.message}`);
         if (browser) await browser.close();
-        res.status(500).json({ success: false, error: error.message });
+        res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
+        res.end();
     }
 });
 

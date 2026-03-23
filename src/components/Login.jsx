@@ -5,7 +5,8 @@ const Login = ({ onLoginSuccess }) => {
   const [matricula, setMatricula] = useState('');
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(150);
+  const [logMsg, setLogMsg] = useState('Iniciando...');
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
 
   const handleLogin = async (e) => {
@@ -14,11 +15,8 @@ const Login = ({ onLoginSuccess }) => {
 
     setLoading(true);
     setError('');
-    setTimeLeft(150);
-
-    const timerInterval = setInterval(() => {
-      setTimeLeft(prev => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
+    setLogMsg('Conectando ao Portal...');
+    setProgress(2);
 
     try {
       const response = await fetch('http://localhost:3001/api/login', {
@@ -27,25 +25,75 @@ const Login = ({ onLoginSuccess }) => {
         body: JSON.stringify({ matricula, senha })
       });
 
-      if (!response.ok) {
-        clearInterval(timerInterval);
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Falha ao autenticar.');
+      if (!response.body) throw new Error('Servidor não suporta streaming.');
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let finalData = null;
+
+      // Mapa de progresso por etapa
+      const progressMap = {
+        '1/5': 15,
+        '2/5': 35,
+        '3/5': 50,
+        '4/5': 65,
+        '5/5': 75,
+        'Acessando:': 80,
+        'Raspando:': 87,
+        'atividades processadas': 93,
+        'concluída': 96,
+        'Raspagem concluída': 99,
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // guarda linha incompleta
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const chunk = JSON.parse(line);
+            if (chunk.type === 'log') {
+              setLogMsg(chunk.message);
+              // Atualizar progresso com base em palavras-chave
+              for (const [key, val] of Object.entries(progressMap)) {
+                if (chunk.message.includes(key)) {
+                  setProgress(val);
+                  break;
+                }
+              }
+            } else if (chunk.type === 'success') {
+              finalData = chunk;
+              setProgress(100);
+            } else if (chunk.type === 'error') {
+              throw new Error(chunk.error);
+            }
+          } catch (parseErr) {
+            if (parseErr.message.includes('JSON')) continue; // chunk parcial
+            throw parseErr;
+          }
+        }
       }
 
-      const data = await response.json();
-      
-      clearInterval(timerInterval);
-      
-      setTimeout(() => {
-        const coursesArray = data.data || data; // Extraindo a lista final
-        const userNameInfo = data.nome || "Aluno UNIFENAS";
-        onLoginSuccess(coursesArray, { matricula, senha, nome: userNameInfo });
-      }, 500);
+      if (finalData) {
+        const coursesArray = finalData.data || [];
+        const userNameInfo = finalData.nome || 'Aluno UNIFENAS';
+        setTimeout(() => {
+          onLoginSuccess(coursesArray, { matricula, senha, nome: userNameInfo });
+        }, 400);
+      } else {
+        throw new Error('Resposta incompleta do servidor.');
+      }
+
     } catch (err) {
-      clearInterval(timerInterval);
       setError(err.message || 'Erro ao comunicar com o servidor. O backend está rodando?');
       setLoading(false);
+      setProgress(0);
     }
   };
 
@@ -100,22 +148,13 @@ const Login = ({ onLoginSuccess }) => {
         
         {loading && (
           <div className="loading-container" style={{ marginTop: '20px' }}>
-            <p className="loading-info" style={{ marginBottom: '8px', fontSize: '14px', color: 'var(--text-muted)' }}>
-              Nosso robô está nos bastidores mapeando as disciplinas...
-            </p>
-            <div style={{ width: '100%', backgroundColor: 'var(--border-color)', borderRadius: '8px', height: '14px', overflow: 'hidden', position: 'relative' }}>
-              <div style={{ 
-                width: `${Math.min(100, ((150 - timeLeft) / 150) * 100)}%`, 
-                backgroundColor: 'var(--primary)', 
-                height: '100%', 
-                transition: 'width 1s linear' 
-              }}></div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', fontSize: '13px', fontWeight: 'bold' }}>
-              <span style={{ color: 'var(--primary)' }}>
-                ⏱️ Tempo estimado: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
-              </span>
-              <span style={{ color: 'var(--text-muted)' }}>Raspando o Moodle...</span>
+            {/* Log em tempo real - substitui os textos fixos */}
+            <p className="loading-log-msg">{logMsg}</p>
+            <div className="progress-bar-track">
+              <div 
+                className="progress-bar-fill"
+                style={{ width: `${progress}%` }}
+              ></div>
             </div>
           </div>
         )}

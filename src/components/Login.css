@@ -167,3 +167,28 @@
     padding: 30px 20px;
   }
 }
+
+/* -- Streaming loader -- */
+.loading-log-msg {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  min-height: 1.4em;
+  margin-bottom: 10px;
+  font-style: italic;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background-color: var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #38bdf8);
+  border-radius: 999px;
+  transition: width 0.8s ease;
+}
