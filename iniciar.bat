@@ -6,16 +6,16 @@ echo =======================================================
 echo Iniciando Servidor e Interface...
 
 :: Instala as dependências se a pasta node_modules não existir no server
-if not exist "server\node_modules\" (
-    echo Instalando servidor (1/2)...
+if not exist server\node_modules (
+    echo Instalando servidor 1 de 2...
     cd server
     call npm install
     cd ..
 )
 
 :: Instala dependencias do frontend se não existir
-if not exist "node_modules\" (
-    echo Instalando interface (2/2)...
+if not exist node_modules (
+    echo Instalando interface 2 de 2...
     call npm install
 )
 
