@@ -279,12 +279,12 @@ app.post('/api/login', async (req, res) => {
         });
         sendLog(`[4/5] 👤 Aluno: ${nomeAluno || 'identificado'}`);
 
-        // Aguarda cards de curso aparecerem (JS do Moodle pode demorar)
+        // Aguarda cards de curso aparecerem de fato (evita skeleton loaders)
         await page.waitForSelector(
-            '[data-region="course-content"], .course-summaryitem, .course-listitem, .coursebox',
-            { timeout: 25000 }
-        ).catch(() => sendLog('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
-        await sleep(3000); // Buffer extra para renderização JavaScript do Moodle
+            'a.coursename, .coursename a, .courses .coursebox',
+            { timeout: 20000 }
+        ).catch(() => sendLog('  ⚠️ Timeout aguardando nomes dos cursos, tentando extrair mesmo assim...'));
+        await sleep(4000); // Dar tempo para renderizar todos os cards na tela após o AJAX
 
         const courses = await page.evaluate(() => {
             let items = Array.from(document.querySelectorAll('[data-region="course-content"][data-course-id], .course-summaryitem[data-region="course-content"]'));
