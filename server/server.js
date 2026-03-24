@@ -319,70 +319,99 @@ app.post('/api/login', async (req, res) => {
                             }
                         }
 
-                        // ─── BYPASS via Puppeteer (necessário para JS) ──────
+                        // ─── BYPASS híbrido: Axios → Cheerio → Puppeteer ───
                         const processBypass = async (atv) => {
                             if (atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
-                            let actPage = null;
                             try {
-                                sendLog(`           🔍 Buscando link de: ${atv.nome}`);
-                                actPage = await browser.newPage();
-                                await blockAssets(actPage);
-                                await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-                                await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
-                                const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
-                                const hasForm = await actPage.$(formBtnSelector);
-                                let hasLink = false;
-                                if (!hasForm) {
-                                    hasLink = await actPage.evaluate(() => {
-                                        const links = Array.from(document.querySelectorAll('a'));
-                                        return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
-                                    });
+                                // ── Tentativa 1: Axios puro (rápido, leve) ──────────────
+                                const res = await http.get(atv.url, {
+                                    maxRedirects: 5,
+                                    validateStatus: s => s >= 200 && s < 400,
+                                    timeout: 8000
+                                });
+                                const finalUrl = res.request?.res?.responseUrl || res.request?.responseURL || '';
+                                if (finalUrl && !finalUrl.includes('mod/resource/view.php') && !finalUrl.includes('mod/url/view.php')) {
+                                    atv.url = finalUrl;
+                                    return;
                                 }
-                                if (hasForm || hasLink) {
-                                    const newPagePromise = new Promise(resolve => {
-                                        browser.once('targetcreated', async target => {
-                                            if (target.type() === 'page') resolve(await target.page());
-                                        });
-                                    });
-                                    if (hasForm) {
-                                        await actPage.click(formBtnSelector);
-                                    } else {
-                                        await actPage.evaluate(() => {
+
+                                // ── Tentativa 2: Cheerio no HTML (médio) ────────────────
+                                const $ = cheerio.load(res.data);
+                                const workaround = $('.resourceworkaround a, .urlworkaround a').first().attr('href')
+                                    || $('object#resourceobject').attr('data')
+                                    || $('iframe#resourceobject').attr('src')
+                                    || $('a[href$=".pdf"], a[href$=".docx"], a[href$=".pptx"], a[href$=".xlsx"]').first().attr('href');
+                                if (workaround) {
+                                    atv.url = workaround;
+                                    return;
+                                }
+
+                                // ── Tentativa 3: Puppeteer (último recurso) ─────────────
+                                sendLog(`           🔍 JS necessário para: ${atv.nome}`);
+                                let actPage = null;
+                                try {
+                                    actPage = await browser.newPage();
+                                    await blockAssets(actPage);
+                                    await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                                    await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                                    const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
+                                    const hasForm = await actPage.$(formBtnSelector);
+                                    let hasLink = false;
+                                    if (!hasForm) {
+                                        hasLink = await actPage.evaluate(() => {
                                             const links = Array.from(document.querySelectorAll('a'));
-                                            const t = links.find(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.parentElement.classList.contains('urlworkaround') || a.parentElement.classList.contains('resourceworkaround'));
-                                            if (t) t.click();
+                                            return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
                                         });
                                     }
-                                    const result = await Promise.race([
-                                        newPagePromise,
-                                        actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
-                                        sleep(4000).then(() => null)
-                                    ]);
-                                    if (result && result.url() !== 'about:blank') {
-                                        atv.url = result.url();
-                                        if (result !== actPage) await result.close();
+                                    if (hasForm || hasLink) {
+                                        const newPagePromise = new Promise(resolve => {
+                                            browser.once('targetcreated', async target => {
+                                                if (target.type() === 'page') resolve(await target.page());
+                                            });
+                                        });
+                                        if (hasForm) await actPage.click(formBtnSelector);
+                                        else await actPage.evaluate(() => {
+                                            const t = Array.from(document.querySelectorAll('a')).find(a =>
+                                                a.textContent.toLowerCase().includes('abrir em uma nova janela') ||
+                                                a.parentElement?.classList.contains('urlworkaround') ||
+                                                a.parentElement?.classList.contains('resourceworkaround')
+                                            );
+                                            if (t) t.click();
+                                        });
+                                        const result = await Promise.race([
+                                            newPagePromise,
+                                            actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
+                                            sleep(4000).then(() => null)
+                                        ]);
+                                        if (result && result.url() !== 'about:blank') {
+                                            atv.url = result.url();
+                                            if (result !== actPage) await result.close();
+                                        } else {
+                                            const embedUrl = await actPage.evaluate(() => {
+                                                const e = document.querySelector('iframe#resourceobject, object#resourceobject');
+                                                return e ? (e.src || e.data) : null;
+                                            });
+                                            if (embedUrl) atv.url = embedUrl;
+                                            else if (actPage.url() !== atv.url) atv.url = actPage.url();
+                                        }
                                     } else {
                                         const embedUrl = await actPage.evaluate(() => {
                                             const e = document.querySelector('iframe#resourceobject, object#resourceobject');
                                             return e ? (e.src || e.data) : null;
                                         });
                                         if (embedUrl) atv.url = embedUrl;
-                                        else if (actPage.url() !== atv.url) atv.url = actPage.url();
                                     }
-                                } else {
-                                    const embedUrl = await actPage.evaluate(() => {
-                                        const e = document.querySelector('iframe#resourceobject, object#resourceobject');
-                                        return e ? (e.src || e.data) : null;
-                                    });
-                                    if (embedUrl) atv.url = embedUrl;
+                                    if (actPage && !actPage.isClosed()) await actPage.close();
+                                } catch (e) {
+                                    if (actPage && !actPage.isClosed()) await actPage.close();
                                 }
-                                if (actPage && !actPage.isClosed()) await actPage.close();
                             } catch (e) {
-                                if (actPage && !actPage.isClosed()) await actPage.close();
+                                // Erro leve — mantém URL original
+                                console.log(`Bypass leve ignorado para ${atv.nome}: ${e.message}`);
                             }
                         };
 
-                        const bypassBatchSize = 5;
+                        const bypassBatchSize = 3; // Reduzido para economizar RAM no Render
                         for (let i = 0; i < atividades.length; i += bypassBatchSize) {
                             await Promise.all(atividades.slice(i, i + bypassBatchSize).map(processBypass));
                         }
