@@ -22,7 +22,7 @@ if not exist "node_modules\" (
 :: Derrubar eventuais servidores rodando nas mesmas portas para evitar conflito
 echo Limpando portas antigas...
 FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr :3001') DO TaskKill.exe /F /PID %%a >nul 2>&1
-FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr :5173') DO TaskKill.exe /F /PID %%a >nul 2>&1
+FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr :5180') DO TaskKill.exe /F /PID %%a >nul 2>&1
 
 :: Inicia o backend em uma nova janela oculta/minimizada (opcional) ou visível
 echo Subindo Servidor Inteligente (Porta 3001)...
@@ -35,7 +35,7 @@ start "Interface do Aluno" cmd /k "npm run dev"
 :: Aguarda uns segundos para o Vite subir e abre o navegador
 timeout /t 3 /nobreak >nul
 echo Servicos online! Abrindo navegador...
-start http://localhost:5173
+start http://localhost:5180
 
 echo =======================================================
 echo.

@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -13,9 +13,6 @@ app.use(express.json());
 // ─── Utilitários globais ──────────────────────────────────────────────────────
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// Health-check — acordar o servidor do Render (cron externo chama a cada 14 min)
-app.get('/ping', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
 // Bloquear assets inúteis no Puppeteer (imagens, CSS, fontes, mídia)
 const blockAssets = async (page) => {
@@ -26,22 +23,11 @@ const blockAssets = async (page) => {
     });
 };
 
-// Flags comuns do Puppeteer para ambientes Linux sem sandbox (Render)
-const PUPPETEER_ARGS = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-first-run',
-];
-
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-
 // Cria instância do axios com cookies de sessão autenticada do Puppeteer
 const buildHttpSession = (cookies) => axios.create({
     headers: {
         'Cookie': cookies.map(c => `${c.name}=${c.value}`).join('; '),
-        'User-Agent': USER_AGENT,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
     },
@@ -146,14 +132,12 @@ app.post('/api/login', async (req, res) => {
         sendLog(`[🚀] Iniciando robô para a matrícula: ${matricula}`);
 
         browser = await puppeteer.launch({
-            headless: 'new',
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: PUPPETEER_ARGS,
+            headless: 'new'
         });
 
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
-        await page.setUserAgent(USER_AGENT);
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         await blockAssets(page);
 
         // ─── ETAPA 1: Login no Portal do Aluno ──────────────────────────────
@@ -273,7 +257,7 @@ app.post('/api/login', async (req, res) => {
         };
 
         // Cria a função de bypass uma vez e reutiliza
-        const processBypass = makeBypassFn(http, browser, sendLog);
+        const processBypass = makeBypassFn(http, sendLog);
 
         sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
 
@@ -438,14 +422,12 @@ app.post('/api/sync-recent', async (req, res) => {
         sendLog(`[🚀] Sincronizando ${urls.length} aula(s) recente(s)...`);
 
         browser = await puppeteer.launch({
-            headless: 'new',
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: PUPPETEER_ARGS,
+            headless: 'new'
         });
 
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
-        await page.setUserAgent(USER_AGENT);
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
         await blockAssets(page);
 
         // Autenticação rápida
@@ -472,7 +454,7 @@ app.post('/api/sync-recent', async (req, res) => {
         const http = buildHttpSession(allCookies);
 
         sendLog('[3/3] 📖 Confirmando aulas acessadas...');
-        const processBypass = makeBypassFn(http, browser, sendLog);
+        const processBypass = makeBypassFn(http, sendLog);
 
         // Adapta para aceitar URL pura (sync-recent passa strings, não objetos)
         const processUrl = async (url) => {
@@ -504,7 +486,7 @@ app.post('/api/sync-recent', async (req, res) => {
     }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, () => {
     console.log(`\n🤖 Express Scraper API - UNIFENAS`);
     console.log(`✅ Rodando na porta ${PORT}\n`);
 });
