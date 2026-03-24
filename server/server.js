@@ -157,18 +157,28 @@ app.post('/api/login', async (req, res) => {
 
         sendLog(`[4/5] 👤 Aluno: ${nomeAluno || 'identificado'}`);
 
-        await page.waitForSelector('[data-region="course-content"], .course-summaryitem, .course-listitem', {
-            timeout: 20000
-        }).catch(() => sendLog('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
-        await sleep(2000);
+        await page.waitForSelector(
+            '[data-region="course-content"], .course-summaryitem, .course-listitem, .coursebox',
+            { timeout: 25000 }
+        ).catch(() => sendLog('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
+        await sleep(4000); // Tempo extra para JS do Moodle terminar de renderizar
 
         const courses = await page.evaluate(() => {
-            const items = Array.from(document.querySelectorAll(
+            // Tenta vários seletores progressivos
+            let items = Array.from(document.querySelectorAll(
                 '[data-region="course-content"][data-course-id], .course-summaryitem[data-region="course-content"]'
             ));
+            // Fallback 1: qualquer course-content com data-course-id
+            if (items.length === 0) {
+                items = Array.from(document.querySelectorAll('[data-course-id]'));
+            }
+            // Fallback 2: coursebox (layout alternativo do Moodle)
+            if (items.length === 0) {
+                items = Array.from(document.querySelectorAll('.coursebox'));
+            }
             return items.map(item => {
-                const courseId = item.getAttribute('data-course-id');
-                const linkEl = item.querySelector('a.coursename, a.aalink.coursename');
+                const courseId = item.getAttribute('data-course-id') || item.getAttribute('data-id') || '';
+                const linkEl = item.querySelector('a.coursename, a.aalink.coursename, .coursename a, h3.coursename a, .info a[href*="course"]');
                 let name = '';
                 if (linkEl) {
                     name = Array.from(linkEl.childNodes)
@@ -183,15 +193,19 @@ app.post('/api/login', async (req, res) => {
                     if (!name) name = linkEl.textContent.replace(/\s+/g, ' ').trim();
                     name = name.replace(/^Curso é favorito\s*/i, '').trim();
                 }
-                const url = linkEl ? linkEl.href : `https://ava.unifenas.br/course/view.php?id=${courseId}`;
+                const url = linkEl ? linkEl.href : (courseId ? `https://ava.unifenas.br/course/view.php?id=${courseId}` : '');
+                if (!url) return null;
                 const progressEl = item.querySelector('.progress-bar');
                 const progresso = progressEl ? (progressEl.getAttribute('aria-valuenow') || '').trim() : '';
                 const progressoTexto = progressEl ? `${progresso}% completo` : '';
                 return { id: courseId, name: name.replace(/\s+/g, ' ').trim(), url, progresso: progressoTexto, secoes: [] };
-            }).filter(c => c.name && c.name.length > 2);
+            }).filter(c => c && c.name && c.name.length > 2);
         });
 
         if (courses.length === 0) {
+            // Captura HTML para diagnóstico
+            const pageTitle = await page.title();
+            sendLog(`  ⚠️ Título da página: ${pageTitle}`);
             throw new Error('Nenhuma matéria encontrada em "Meus Cursos". O login pode ter falhado silenciosamente.');
         }
 
