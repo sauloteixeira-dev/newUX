@@ -68,8 +68,7 @@ app.post('/api/login', async (req, res) => {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--no-first-run',
-                '--no-zygote'
+                '--no-first-run'
             ]
         });
 
@@ -482,8 +481,7 @@ app.post('/api/sync-recent', async (req, res) => {
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--no-first-run',
-                '--no-zygote'
+                '--no-first-run'
             ]
         });
 
