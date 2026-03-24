@@ -10,40 +10,181 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Utilitário: sleep
+// ─── Utilitários globais ──────────────────────────────────────────────────────
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Rota de health-check — usada pelo frontend para acordar o servidor do Render
+// Health-check — acordar o servidor do Render (cron externo chama a cada 14 min)
 app.get('/ping', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
 
-// Utilitário: Bloquear assets inúteis no Puppeteer
+// Bloquear assets inúteis no Puppeteer (imagens, CSS, fontes, mídia)
 const blockAssets = async (page) => {
     await page.setRequestInterception(true);
     page.on('request', (req) => {
-        const type = req.resourceType();
-        if (['image', 'stylesheet', 'font', 'media'].includes(type)) req.abort();
+        if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) req.abort();
         else req.continue();
     });
 };
 
-// Cria cliente axios com cookies de sessão do Puppeteer
-const buildHttpSession = (cookies) => {
-    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
-    return axios.create({
-        headers: {
-            'Cookie': cookieStr,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-        },
-        timeout: 20000,
+// Flags comuns do Puppeteer para ambientes Linux sem sandbox (Render)
+const PUPPETEER_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-first-run',
+];
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+// Cria instância do axios com cookies de sessão autenticada do Puppeteer
+const buildHttpSession = (cookies) => axios.create({
+    headers: {
+        'Cookie': cookies.map(c => `${c.name}=${c.value}`).join('; '),
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+    },
+    timeout: 20000,
+});
+
+// ─── Função compartilhada: extrai atividades de um contexto Cheerio ───────────
+const parseAtividades = ($ctx, $) => {
+    const atividades = [];
+    $ctx.find('li.activity[id^="module-"]').each((_, act) => {
+        const $a = $(act);
+        if ($a.hasClass('modtype_label')) return;
+        const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
+        if (!actLink.length) return;
+
+        let nome = '';
+        const instanceNode = $a.find('.instancename');
+        if (instanceNode.length) {
+            nome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
+            if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
+        }
+        if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
+        nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
+        if (!nome) return;
+
+        let tipo = 'Material';
+        if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
+        else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
+        else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
+        else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
+        else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
+        else if ($a.hasClass('modtype_page')) tipo = 'Página';
+        else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
+        else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
+
+        atividades.push({ nome, url: actLink.attr('href'), tipo });
     });
+    return atividades;
 };
 
+// ─── Função compartilhada: bypass híbrido Axios → Cheerio → Puppeteer ────────
+const makeBypassFn = (http, browser, sendLog) => async (atv) => {
+    if (atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
+    try {
+        // Tentativa 1: Axios puro — segue redirecionamentos HTTP
+        const res = await http.get(atv.url, {
+            maxRedirects: 5,
+            validateStatus: s => s >= 200 && s < 400,
+            timeout: 8000,
+        });
+        const finalUrl = res.request?.res?.responseUrl || res.request?.responseURL || '';
+        if (finalUrl && !finalUrl.includes('mod/resource/view.php') && !finalUrl.includes('mod/url/view.php')) {
+            atv.url = finalUrl;
+            return;
+        }
+
+        // Tentativa 2: Cheerio no HTML — procura link de workaround
+        const $ = cheerio.load(res.data);
+        const workaround = $('.resourceworkaround a, .urlworkaround a').first().attr('href')
+            || $('object#resourceobject').attr('data')
+            || $('iframe#resourceobject').attr('src')
+            || $('a[href$=".pdf"], a[href$=".docx"], a[href$=".pptx"], a[href$=".xlsx"]').first().attr('href');
+        if (workaround) {
+            atv.url = workaround;
+            return;
+        }
+
+        // Tentativa 3: Puppeteer — apenas quando JS é realmente necessário
+        sendLog(`           🔍 JS necessário para: ${atv.nome}`);
+        let actPage = null;
+        try {
+            actPage = await browser.newPage();
+            await blockAssets(actPage);
+            await actPage.setUserAgent(USER_AGENT);
+            await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+
+            const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
+            const hasForm = await actPage.$(formBtnSelector);
+            const hasLink = hasForm ? false : await actPage.evaluate(() =>
+                Array.from(document.querySelectorAll('a')).some(a =>
+                    a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround')
+                )
+            );
+
+            if (hasForm || hasLink) {
+                const newPagePromise = new Promise(resolve => {
+                    browser.once('targetcreated', async target => {
+                        if (target.type() === 'page') resolve(await target.page());
+                    });
+                });
+
+                if (hasForm) {
+                    await actPage.click(formBtnSelector);
+                } else {
+                    await actPage.evaluate(() => {
+                        const t = Array.from(document.querySelectorAll('a')).find(a =>
+                            a.textContent.toLowerCase().includes('abrir em uma nova janela') ||
+                            a.parentElement?.classList.contains('urlworkaround') ||
+                            a.parentElement?.classList.contains('resourceworkaround')
+                        );
+                        if (t) t.click();
+                    });
+                }
+
+                const result = await Promise.race([
+                    newPagePromise,
+                    actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
+                    sleep(4000).then(() => null),
+                ]);
+
+                if (result && result.url() !== 'about:blank') {
+                    atv.url = result.url();
+                    if (result !== actPage) await result.close();
+                } else {
+                    const embedUrl = await actPage.evaluate(() => {
+                        const e = document.querySelector('iframe#resourceobject, object#resourceobject');
+                        return e ? (e.src || e.data) : null;
+                    });
+                    if (embedUrl) atv.url = embedUrl;
+                    else if (actPage.url() !== atv.url) atv.url = actPage.url();
+                }
+            } else {
+                const embedUrl = await actPage.evaluate(() => {
+                    const e = document.querySelector('iframe#resourceobject, object#resourceobject');
+                    return e ? (e.src || e.data) : null;
+                });
+                if (embedUrl) atv.url = embedUrl;
+            }
+
+            if (actPage && !actPage.isClosed()) await actPage.close();
+        } catch (e) {
+            if (actPage && !actPage.isClosed()) await actPage.close();
+        }
+    } catch (e) {
+        // Erro leve — mantém URL original sem travar o fluxo
+        console.log(`Bypass ignorado para "${atv.nome}": ${e.message}`);
+    }
+};
+
+// ─── Rota principal: Login + Raspagem completa ────────────────────────────────
 app.post('/api/login', async (req, res) => {
     const { matricula, senha } = req.body;
 
-    // Configura streaming de resposta (NDJSON)
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -66,53 +207,38 @@ app.post('/api/login', async (req, res) => {
         browser = await puppeteer.launch({
             headless: 'new',
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-first-run'
-            ]
+            args: PUPPETEER_ARGS,
         });
 
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-        await blockAssets(page); // 🚀 Ativa modo turbo
+        await page.setUserAgent(USER_AGENT);
+        await blockAssets(page);
 
-        // ─── ETAPA 1: Login no Portal do Aluno ───────────────────────────────────
+        // ─── ETAPA 1: Login no Portal do Aluno ──────────────────────────────
         sendLog('[1/5] 🌐 Abrindo o Portal do Aluno...');
         await page.goto('https://aluno.unifenas.br/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-        // Preenche matrícula
         await page.waitForSelector('#username', { timeout: 15000 });
         await page.click('#username', { clickCount: 3 });
-        await page.type('#username', matricula, { delay: 50 });
-
-        // Preenche senha
+        await page.type('#username', matricula, { delay: 40 });
         await page.waitForSelector('#password', { timeout: 10000 });
         await page.click('#password', { clickCount: 3 });
-        await page.type('#password', senha, { delay: 50 });
+        await page.type('#password', senha, { delay: 40 });
 
         sendLog('[1/5] 🔑 Credenciais preenchidas. Clicando em Entrar...');
-
         const btnEntrar = await page.$('button[type="submit"]');
-        if (btnEntrar) {
-            await btnEntrar.click();
-        } else {
-            await page.keyboard.press('Enter');
-        }
+        if (btnEntrar) await btnEntrar.click();
+        else await page.keyboard.press('Enter');
 
         sendLog('[1/5] ⏳ Aguardando autenticação do Portal...');
         await Promise.race([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-            sleep(15000)
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+            sleep(20000),
         ]).catch(() => { });
-        await sleep(4000); // extra para cookies SSO
 
+        // Verifica falha de login
         const urlAposLogin = page.url();
-        sendLog(`[1/5] ✓ Autenticado no Portal!`);
-
         const aindaNoLogin = urlAposLogin.includes('/login') || urlAposLogin === 'https://aluno.unifenas.br/';
         const campoAindaVisivel = await page.$('#username');
         if (aindaNoLogin && campoAindaVisivel) {
@@ -122,25 +248,23 @@ app.post('/api/login', async (req, res) => {
             });
             throw new Error(`Login no Portal falhou. ${errMsg || 'Verifique matrícula e senha.'}`);
         }
+        sendLog('[1/5] ✓ Autenticado no Portal!');
 
-        // ─── ETAPA 2: Navegar para auto-login-moodle ────────────────────────────
+        // ─── ETAPA 2: SSO → Moodle ──────────────────────────────────────────
         sendLog('[2/5] 🔄 Conectando ao AVA Moodle via SSO...');
         await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
-        await sleep(5000);
+        // Sem sleep aqui — networkidle2 garante que o SSO completou
+        sendLog('[2/5] ✓ Sessão Moodle ativa!');
 
-        sendLog(`[2/5] ✓ Sessão Moodle ativa!`);
-
-        // ─── ETAPA 3: Acessar Meus Cursos diretamente ──────────────────────────
+        // ─── ETAPA 3: Meus Cursos ────────────────────────────────────────────
         sendLog('[3/5] 📚 Buscando suas matérias no AVA...');
         await page.goto('https://ava.unifenas.br/my/courses.php', { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await sleep(3000);
 
-        const urlMoodle = page.url();
-        if (urlMoodle.includes('/login/index.php')) {
-            throw new Error('O SSO falhou — o Moodle não reconheceu a sessão do Portal. Tente novamente.');
+        if (page.url().includes('/login/index.php')) {
+            throw new Error('O SSO falhou — o Moodle não reconheceu a sessão. Tente novamente.');
         }
 
-        // ─── ETAPA 4: Raspar lista de cursos e Nome do Aluno ────────────────────
+        // ─── ETAPA 4: Extração de cursos e nome do aluno ────────────────────
         sendLog('[4/5] 🎓 Extraindo informações de usuário e matérias...');
 
         const nomeAluno = await page.evaluate(() => {
@@ -148,34 +272,25 @@ app.post('/api/login', async (req, res) => {
             if (nameEl) return nameEl.textContent.replace(/\s+/g, ' ').trim();
             const loginInfo = document.querySelector('.logininfo');
             if (loginInfo) {
-                const text = loginInfo.textContent.replace(/\s+/g, ' ');
-                const match = text.match(/Você acessou como\s+(.+?)\s*\(/i);
+                const match = loginInfo.textContent.replace(/\s+/g, ' ').match(/Você acessou como\s+(.+?)\s*\(/i);
                 if (match) return match[1].trim();
             }
             return '';
         });
-
         sendLog(`[4/5] 👤 Aluno: ${nomeAluno || 'identificado'}`);
 
+        // Aguarda cards de curso aparecerem (JS do Moodle pode demorar)
         await page.waitForSelector(
             '[data-region="course-content"], .course-summaryitem, .course-listitem, .coursebox',
             { timeout: 25000 }
         ).catch(() => sendLog('  ⚠️ Timeout aguardando cards, tentando extrair mesmo assim...'));
-        await sleep(4000); // Tempo extra para JS do Moodle terminar de renderizar
+        await sleep(3000); // Buffer extra para renderização JavaScript do Moodle
 
         const courses = await page.evaluate(() => {
-            // Tenta vários seletores progressivos
-            let items = Array.from(document.querySelectorAll(
-                '[data-region="course-content"][data-course-id], .course-summaryitem[data-region="course-content"]'
-            ));
-            // Fallback 1: qualquer course-content com data-course-id
-            if (items.length === 0) {
-                items = Array.from(document.querySelectorAll('[data-course-id]'));
-            }
-            // Fallback 2: coursebox (layout alternativo do Moodle)
-            if (items.length === 0) {
-                items = Array.from(document.querySelectorAll('.coursebox'));
-            }
+            let items = Array.from(document.querySelectorAll('[data-region="course-content"][data-course-id], .course-summaryitem[data-region="course-content"]'));
+            if (items.length === 0) items = Array.from(document.querySelectorAll('[data-course-id]'));
+            if (items.length === 0) items = Array.from(document.querySelectorAll('.coursebox'));
+
             return items.map(item => {
                 const courseId = item.getAttribute('data-course-id') || item.getAttribute('data-id') || '';
                 const linkEl = item.querySelector('a.coursename, a.aalink.coursename, .coursename a, h3.coursename a, .info a[href*="course"]');
@@ -187,9 +302,7 @@ app.post('/api/login', async (req, res) => {
                             if (n.nodeType === 1) return !n.classList.contains('visually-hidden') && !n.classList.contains('hidden');
                             return false;
                         })
-                        .map(n => n.textContent.trim())
-                        .join(' ')
-                        .trim();
+                        .map(n => n.textContent.trim()).join(' ').trim();
                     if (!name) name = linkEl.textContent.replace(/\s+/g, ' ').trim();
                     name = name.replace(/^Curso é favorito\s*/i, '').trim();
                 }
@@ -197,38 +310,39 @@ app.post('/api/login', async (req, res) => {
                 if (!url) return null;
                 const progressEl = item.querySelector('.progress-bar');
                 const progresso = progressEl ? (progressEl.getAttribute('aria-valuenow') || '').trim() : '';
-                const progressoTexto = progressEl ? `${progresso}% completo` : '';
-                return { id: courseId, name: name.replace(/\s+/g, ' ').trim(), url, progresso: progressoTexto, secoes: [] };
+                return { id: courseId, name: name.replace(/\s+/g, ' ').trim(), url, progresso: progresso ? `${progresso}% completo` : '', secoes: [] };
             }).filter(c => c && c.name && c.name.length > 2);
         });
 
         if (courses.length === 0) {
-            // Captura HTML para diagnóstico
             const pageTitle = await page.title();
-            sendLog(`  ⚠️ Título da página: ${pageTitle}`);
+            sendLog(`  ⚠️ Título da página atual: ${pageTitle}`);
             throw new Error('Nenhuma matéria encontrada em "Meus Cursos". O login pode ter falhado silenciosamente.');
         }
-
         sendLog(`[4/5] ✅ ${courses.length} matérias encontradas!`);
 
-        // ─── Extrair cookies para HTTP direto ────────────────────────────────
+        // Extrai cookies para usar o Axios com a sessão autenticada
         const allCookies = await page.cookies('https://ava.unifenas.br');
         const http = buildHttpSession(allCookies);
-        sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
 
-        // Helper: busca HTML via HTTP e retorna cheerio
+        // Helper: busca página HTML via Axios+Cheerio
         const getHtml = async (url) => {
             const resp = await http.get(url);
             return cheerio.load(resp.data);
         };
 
-        // ─── Processar cursos em paralelo (lotes de 2) ──────────────────────
+        // Cria a função de bypass uma vez e reutiliza
+        const processBypass = makeBypassFn(http, browser, sendLog);
+
+        sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
+
+        // ─── Processar cursos em lotes paralelos de 2 ────────────────────────
         const processarCurso = async (curso) => {
             sendLog(`  → Acessando: ${curso.name}`);
             try {
                 const $ = await getHtml(curso.url);
 
-                // Extrair professor via HTTP+cheerio
+                // Professor
                 const profLink = $('a.view-user-profile-link').first();
                 if (profLink.length) {
                     curso.professor = { nome: (profLink.attr('title') || profLink.text()).trim(), link: profLink.attr('href') || '#' };
@@ -237,7 +351,7 @@ app.post('/api/login', async (req, res) => {
                     if (contactLink.length) curso.professor = { nome: contactLink.text().trim(), link: contactLink.attr('href') };
                 }
 
-                // Extrair seções via HTTP+cheerio
+                // Seções
                 const secoes = [];
                 $('li.section.main[data-sectionid]').each((_, section) => {
                     const $s = $(section);
@@ -247,194 +361,50 @@ app.post('/api/login', async (req, res) => {
                     const locked = $s.find('.fa-lock').length > 0;
                     const disponibilidade = $s.find('.availabilityinfo').text().replace(/\s+/g, ' ').trim().substring(0, 200);
                     const progressoTexto = $s.find('.progress-text span').text().trim() || '';
-                    
-                    // Pré-buscar atividades já presentes nesta seção na página principal
-                    const atividadesPre = [];
-                    $s.find('li.activity[id^="module-"]').each((__, act) => {
-                        const $a = $(act);
-                        if ($a.hasClass('modtype_label')) return;
-                        const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
-                        if (!actLink.length) return;
-                        let aNome = '';
-                        const instanceNode = $a.find('.instancename');
-                        if (instanceNode.length) {
-                            aNome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
-                            if (!aNome) aNome = instanceNode.text().replace(/\s+/g, ' ').trim();
-                        }
-                        if (!aNome) aNome = actLink.text().replace(/\s+/g, ' ').trim();
-
-                        aNome = aNome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
-                        let tipo = 'Material';
-                        if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
-                        else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
-                        else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
-                        else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
-                        else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
-                        else if ($a.hasClass('modtype_page')) tipo = 'Página';
-                        else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
-                        else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
-                        if (aNome) atividadesPre.push({ nome: aNome, url: actLink.attr('href'), tipo });
-                    });
-
-                    secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades: atividadesPre });
+                    const atividades = parseAtividades($s, $);
+                    secoes.push({ nome, url, locked, disponibilidade, progressoTexto, atividades });
                 });
 
-                // ─── Para cada seção: processamento e puppeteer bypass ──────
+                // Para cada seção: busca sub-seção se necessário e resolve links
                 for (const secao of secoes) {
                     if (secao.locked) continue;
                     try {
-                        let atividades = secao.atividades; // Usa as do DOM
-                        
-                        // Busca do link só se não tiver e se for uma página separada
+                        let atividades = secao.atividades;
+
+                        // Só busca sub-seção se não carregou atividades e tem URL de seção separada
                         if (atividades.length === 0 && secao.url && secao.url.includes('&section=')) {
                             sendLog(`       📖 Buscando sub-seção: ${secao.nome}`);
                             const $s = await getHtml(secao.url);
-                            $s('li.activity[id^="module-"]').each((_, act) => {
-                                const $a = $s(act);
-                                if ($a.hasClass('modtype_label')) return;
-                                const actLink = $a.find('a[href*="mod/"], a[href*="course/"]').first();
-                                if (!actLink.length) return;
-                                let nome = '';
-                                const instanceNode = $a.find('.instancename');
-                                if (instanceNode.length) {
-                                    nome = instanceNode.clone().children('.visually-hidden, .hidden, .accesshide, .sr-only').remove().end().text().trim();
-                                    if (!nome) nome = instanceNode.text().replace(/\s+/g, ' ').trim();
-                                }
-                                if (!nome) nome = actLink.text().replace(/\s+/g, ' ').trim();
-
-                                nome = nome.replace(/\s*(Arquivo|Ferramenta externa|Fórum|Tarefa|Questionário|Quiz|Página|URL|Pasta|Material|Oculto para estudantes)$/i, '').trim();
-                                let tipo = 'Material';
-                                if ($a.hasClass('modtype_forum')) tipo = 'Fórum';
-                                else if ($a.hasClass('modtype_assign')) tipo = 'Tarefa';
-                                else if ($a.hasClass('modtype_quiz')) tipo = 'Quiz/Avaliação';
-                                else if ($a.hasClass('modtype_resource')) tipo = 'Arquivo';
-                                else if ($a.hasClass('modtype_lti')) tipo = 'Ferramenta externa';
-                                else if ($a.hasClass('modtype_page')) tipo = 'Página';
-                                else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
-                                else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
-                                if (nome) atividades.push({ nome, url: actLink.attr('href'), tipo });
-                            });
+                            atividades = parseAtividades($s.root(), $s);
                             if (atividades.length > 0) {
-                                sendLog(`         ✓ ${atividades.length} atividades pré-carregadas em ${secao.nome}`);
+                                sendLog(`         ✓ ${atividades.length} atividades em ${secao.nome}`);
                             }
                         }
 
-                        // ─── BYPASS híbrido: Axios → Cheerio → Puppeteer ───
-                        const processBypass = async (atv) => {
-                            if (atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
-                            try {
-                                // ── Tentativa 1: Axios puro (rápido, leve) ──────────────
-                                const res = await http.get(atv.url, {
-                                    maxRedirects: 5,
-                                    validateStatus: s => s >= 200 && s < 400,
-                                    timeout: 8000
-                                });
-                                const finalUrl = res.request?.res?.responseUrl || res.request?.responseURL || '';
-                                if (finalUrl && !finalUrl.includes('mod/resource/view.php') && !finalUrl.includes('mod/url/view.php')) {
-                                    atv.url = finalUrl;
-                                    return;
-                                }
-
-                                // ── Tentativa 2: Cheerio no HTML (médio) ────────────────
-                                const $ = cheerio.load(res.data);
-                                const workaround = $('.resourceworkaround a, .urlworkaround a').first().attr('href')
-                                    || $('object#resourceobject').attr('data')
-                                    || $('iframe#resourceobject').attr('src')
-                                    || $('a[href$=".pdf"], a[href$=".docx"], a[href$=".pptx"], a[href$=".xlsx"]').first().attr('href');
-                                if (workaround) {
-                                    atv.url = workaround;
-                                    return;
-                                }
-
-                                // ── Tentativa 3: Puppeteer (último recurso) ─────────────
-                                sendLog(`           🔍 JS necessário para: ${atv.nome}`);
-                                let actPage = null;
-                                try {
-                                    actPage = await browser.newPage();
-                                    await blockAssets(actPage);
-                                    await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-                                    await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-                                    const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
-                                    const hasForm = await actPage.$(formBtnSelector);
-                                    let hasLink = false;
-                                    if (!hasForm) {
-                                        hasLink = await actPage.evaluate(() => {
-                                            const links = Array.from(document.querySelectorAll('a'));
-                                            return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
-                                        });
-                                    }
-                                    if (hasForm || hasLink) {
-                                        const newPagePromise = new Promise(resolve => {
-                                            browser.once('targetcreated', async target => {
-                                                if (target.type() === 'page') resolve(await target.page());
-                                            });
-                                        });
-                                        if (hasForm) await actPage.click(formBtnSelector);
-                                        else await actPage.evaluate(() => {
-                                            const t = Array.from(document.querySelectorAll('a')).find(a =>
-                                                a.textContent.toLowerCase().includes('abrir em uma nova janela') ||
-                                                a.parentElement?.classList.contains('urlworkaround') ||
-                                                a.parentElement?.classList.contains('resourceworkaround')
-                                            );
-                                            if (t) t.click();
-                                        });
-                                        const result = await Promise.race([
-                                            newPagePromise,
-                                            actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
-                                            sleep(4000).then(() => null)
-                                        ]);
-                                        if (result && result.url() !== 'about:blank') {
-                                            atv.url = result.url();
-                                            if (result !== actPage) await result.close();
-                                        } else {
-                                            const embedUrl = await actPage.evaluate(() => {
-                                                const e = document.querySelector('iframe#resourceobject, object#resourceobject');
-                                                return e ? (e.src || e.data) : null;
-                                            });
-                                            if (embedUrl) atv.url = embedUrl;
-                                            else if (actPage.url() !== atv.url) atv.url = actPage.url();
-                                        }
-                                    } else {
-                                        const embedUrl = await actPage.evaluate(() => {
-                                            const e = document.querySelector('iframe#resourceobject, object#resourceobject');
-                                            return e ? (e.src || e.data) : null;
-                                        });
-                                        if (embedUrl) atv.url = embedUrl;
-                                    }
-                                    if (actPage && !actPage.isClosed()) await actPage.close();
-                                } catch (e) {
-                                    if (actPage && !actPage.isClosed()) await actPage.close();
-                                }
-                            } catch (e) {
-                                // Erro leve — mantém URL original
-                                console.log(`Bypass leve ignorado para ${atv.nome}: ${e.message}`);
-                            }
-                        };
-
-                        const bypassBatchSize = 3; // Reduzido para economizar RAM no Render
+                        // Resolve URLs de arquivos/links (Axios→Cheerio→Puppeteer)
+                        const bypassBatchSize = 3;
                         for (let i = 0; i < atividades.length; i += bypassBatchSize) {
                             await Promise.all(atividades.slice(i, i + bypassBatchSize).map(processBypass));
                         }
 
                         secao.atividades = atividades;
-                        // LOG SEÇÃO
                         sendLog(`         ✓ ${atividades.length} atividades processadas`);
-
                     } catch (e) {
                         sendLog(`         ✗ Erro na seção "${secao.nome}": ${e.message}`);
                     }
                 }
 
                 curso.secoes = secoes;
-                sendLog(`     ✓ ${curso.name} seções concluídas`);
+                sendLog(`     ✓ ${curso.name} concluído`);
 
-                // ─── Notas via HTTP+cheerio (sem browser!) ───────────────────
+                // Notas via Axios+Cheerio (sem Puppeteer)
                 try {
                     sendLog(`     📊 Buscando notas de ${curso.name}...`);
                     const $g = await getHtml(`https://ava.unifenas.br/grade/report/index.php?id=${curso.id}`);
                     const notasAtividades = {};
                     const somaModulos = [];
                     let totalCurso = '-';
+
                     $g('table.user-grade tbody tr').each((_, tr) => {
                         const $tr = $g(tr);
                         const th = $tr.find('th.column-itemname');
@@ -445,58 +415,65 @@ app.post('/api/login', async (req, res) => {
                         const name = tagNome.text().trim();
                         const gradeMatch = td.text().match(/\d+,\d+|\d+\.\d+|\d+/);
                         const gradeText = gradeMatch ? gradeMatch[0] : '-';
+
                         if ($tr.hasClass('courseitem') || th.hasClass('courseitem')) {
                             totalCurso = gradeText;
                         } else if ($tr.hasClass('categoryitem') || th.hasClass('categoryitem')) {
                             somaModulos.push({ nome: name, nota: gradeText });
                         } else {
-                            const cleanName = name.replace(/^Avaliac(\u00e3|a)o global do f(\u00f3|o)rum\s+/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+                            const cleanName = name
+                                .replace(/^Avaliac(\u00e3|a)o global do f(\u00f3|o)rum\s+/i, '')
+                                .replace(/\s+/g, ' ').trim().toLowerCase();
                             if (cleanName) notasAtividades[cleanName] = gradeText;
                         }
                     });
+
                     curso.notasResult = { notasAtividades, somaModulos, totalCurso };
-                    // Associar notas às atividades
+
+                    // Associa notas às atividades pelo nome
                     curso.secoes.forEach(sec => {
                         (sec.atividades || []).forEach(atv => {
                             const cleanAtvName = atv.nome.replace(/\s+/g, ' ').trim().toLowerCase();
                             const keys = Object.keys(notasAtividades);
-                            const matchKey = keys.find(k => k.length > 3 && (k === cleanAtvName || k.includes(cleanAtvName) || cleanAtvName.includes(k)));
+                            const matchKey = keys.find(k =>
+                                k.length > 3 && (k === cleanAtvName || k.includes(cleanAtvName) || cleanAtvName.includes(k))
+                            );
                             if (matchKey) atv.notaStr = notasAtividades[matchKey];
                         });
                     });
+
                     sendLog(`     ✓ Notas extraídas (${Object.keys(notasAtividades).length} itens)`);
                 } catch (errGrade) {
-                    sendLog(`     ✗ Aviso: erro ao buscar notas: ${errGrade.message}`);
+                    sendLog(`     ✗ Erro nas notas: ${errGrade.message}`);
                 }
 
             } catch (err) {
-                sendLog(`     ✗ Erro ao raspar "${curso.name}": ${err.message}`);
+                sendLog(`     ✗ Erro em "${curso.name}": ${err.message}`);
                 curso.secoes = [];
                 curso.erro = err.message;
             }
         };
 
-        // Processar cursos em lotes paralelos de 2
+        // Lotes de 2 cursos em paralelo
         const courseBatchSize = 2;
         for (let i = 0; i < courses.length; i += courseBatchSize) {
             await Promise.all(courses.slice(i, i + courseBatchSize).map(processarCurso));
         }
 
-
         await browser.close();
         sendLog(`[🎉] Raspagem concluída! ${courses.length} matérias prontas.`);
-
         res.write(JSON.stringify({ type: 'success', matricula, nome: nomeAluno || 'Aluno UNIFENAS', data: courses }) + '\n');
         res.end();
 
     } catch (error) {
         console.error(`\n[❌] Erro crítico: ${error.message}`);
-        if (browser) await browser.close();
+        if (browser) await browser.close().catch(() => { });
         res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
         res.end();
     }
 });
 
+// ─── Rota de sync-recente: re-autentica e acessa URLs recentes ────────────────
 app.post('/api/sync-recent', async (req, res) => {
     const { matricula, senha, urls } = req.body;
 
@@ -510,7 +487,7 @@ app.post('/api/sync-recent', async (req, res) => {
         try { res.write(JSON.stringify({ type: 'log', message: msg }) + '\n'); } catch (_) { }
     };
 
-    if (!matricula || !senha || !urls || !Array.isArray(urls) || urls.length === 0) {
+    if (!matricula || !senha || !Array.isArray(urls) || urls.length === 0) {
         res.write(JSON.stringify({ type: 'error', error: 'Matrícula, Senha e URLs são obrigatórios' }) + '\n');
         return res.end();
     }
@@ -522,103 +499,65 @@ app.post('/api/sync-recent', async (req, res) => {
         browser = await puppeteer.launch({
             headless: 'new',
             executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--no-first-run'
-            ]
+            args: PUPPETEER_ARGS,
         });
 
         const page = await browser.newPage();
         await page.setViewport({ width: 1280, height: 800 });
-        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        await page.setUserAgent(USER_AGENT);
         await blockAssets(page);
 
-        sendLog('[1/3] 🌐 Autenticando para o acesso rápido...');
+        // Autenticação rápida
+        sendLog('[1/3] 🌐 Autenticando...');
         await page.goto('https://aluno.unifenas.br/', { waitUntil: 'domcontentloaded', timeout: 60000 });
         await page.waitForSelector('#username', { timeout: 15000 });
-        await page.type('#username', matricula, { delay: 50 });
-        await page.type('#password', senha, { delay: 50 });
+        await page.type('#username', matricula, { delay: 40 });
+        await page.type('#password', senha, { delay: 40 });
         const btnEntrar = await page.$('button[type="submit"]');
-        if (btnEntrar) { await btnEntrar.click(); } else { await page.keyboard.press('Enter'); }
+        if (btnEntrar) await btnEntrar.click();
+        else await page.keyboard.press('Enter');
 
         await Promise.race([
-            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
-            sleep(15000)
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }),
+            sleep(20000),
         ]).catch(() => { });
-        await sleep(3000);
 
         sendLog('[2/3] 🔄 Conectando SSO Moodle...');
         await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
-        await sleep(4500);
+        // Sem sleep — networkidle2 já aguarda o SSO
 
-        sendLog('[3/3] 📖 Confirmando aulas acessadas... (By-pass)');
-        const processBypass = async (url) => {
-            let actPage = null;
-            try {
-                sendLog(`  -> Acessando: ${url}`);
-                actPage = await browser.newPage();
-                await blockAssets(actPage);
-                await actPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
-                await actPage.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
-                const hasForm = await actPage.$(formBtnSelector);
-                let hasLink = false;
-                if (!hasForm) {
-                    hasLink = await actPage.evaluate(() => {
-                        const links = Array.from(document.querySelectorAll('a'));
-                        return links.some(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround'));
-                    });
-                }
-                if (hasForm || hasLink) {
-                    const newPagePromise = new Promise(resolve => {
-                        browser.once('targetcreated', async target => {
-                            if (target.type() === 'page') { resolve(await target.page()); }
-                        });
-                    });
-                    if (hasForm) {
-                        await actPage.click(formBtnSelector);
-                    } else {
-                        await actPage.evaluate(() => {
-                            const links = Array.from(document.querySelectorAll('a'));
-                            const targetLink = links.find(a => a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.parentElement.classList.contains('urlworkaround') || a.parentElement.classList.contains('resourceworkaround'));
-                            if (targetLink) targetLink.click();
-                        });
-                    }
-                    const result = await Promise.race([
-                        newPagePromise,
-                        actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
-                        sleep(4000).then(() => null)
-                    ]);
-                    if (result && result !== actPage) await result.close();
-                }
-                if (actPage && !actPage.isClosed()) await actPage.close();
-                return { url, status: 'ok' };
-            } catch (e) {
-                if (actPage && !actPage.isClosed()) await actPage.close();
-                return { url, status: 'error', error: e.message };
-            }
+        // Extrai cookies para usar Axios com sessão autenticada
+        const allCookies = await page.cookies('https://ava.unifenas.br');
+        const http = buildHttpSession(allCookies);
+
+        sendLog('[3/3] 📖 Confirmando aulas acessadas...');
+        const processBypass = makeBypassFn(http, browser, sendLog);
+
+        // Adapta para aceitar URL pura (sync-recent passa strings, não objetos)
+        const processUrl = async (url) => {
+            const fakeAtv = { nome: url, url, tipo: 'Arquivo' };
+            await processBypass(fakeAtv);
+            return { url, status: 'ok' };
         };
 
         const bypassBatchSize = 3;
         const results = [];
         for (let i = 0; i < urls.length; i += bypassBatchSize) {
             const batch = urls.slice(i, i + bypassBatchSize);
-            const batchResults = await Promise.all(batch.map(processBypass));
+            const batchResults = await Promise.all(batch.map(url =>
+                processUrl(url).catch(e => ({ url, status: 'error', error: e.message }))
+            ));
             results.push(...batchResults);
         }
 
         await browser.close();
-        sendLog(`[🎉] Atualização de links recentes concluída!`);
-
+        sendLog('[🎉] Atualização de links recentes concluída!');
         res.write(JSON.stringify({ type: 'success', matricula, results }) + '\n');
         res.end();
 
     } catch (error) {
         console.error(`\n[❌] Erro ao sincronizar recentes: ${error.message}`);
-        if (browser) await browser.close();
+        if (browser) await browser.close().catch(() => { });
         res.write(JSON.stringify({ type: 'error', error: error.message }) + '\n');
         res.end();
     }
