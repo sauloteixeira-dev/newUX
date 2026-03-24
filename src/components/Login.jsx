@@ -40,6 +40,9 @@ const Login = ({ onLoginSuccess }) => {
     setLogMsg('Conectando ao Portal...');
     setProgress(2);
 
+    const startTime = Date.now();
+    console.log(`[FRONT] ⏱️ INÍCIO DA RASPAGEM: ${new Date().toLocaleTimeString()}`);
+
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       console.log(`[FRONT] Enviando POST para: ${apiUrl}/api/login`);
@@ -112,6 +115,10 @@ const Login = ({ onLoginSuccess }) => {
       }
 
       if (finalData) {
+        const endTime = Date.now();
+        const totalTempo = ((endTime - startTime) / 1000).toFixed(2);
+        console.log(`[FRONT] ⏱️ FIM DA RASPAGEM: ${new Date().toLocaleTimeString()} - Duração: ${totalTempo} segundos`);
+
         const coursesArray = finalData.data || [];
         const userNameInfo = finalData.nome || 'Aluno UNIFENAS';
         setTimeout(() => {
