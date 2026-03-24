@@ -82,18 +82,18 @@ const parseAtividades = ($ctx, $) => {
     return atividades;
 };
 
-// ─── Função compartilhada: bypass híbrido Axios → Cheerio → Puppeteer ────────
-const makeBypassFn = (http, browser, sendLog) => async (atv) => {
+// ─── Função compartilhada: bypass ULTRA RÁPIDO Axios + Cheerio ───────────────
+const makeBypassFn = (http, sendLog) => async (atv) => {
     if (atv.tipo !== 'Arquivo' && atv.tipo !== 'Link Externo') return;
     try {
-        // Tentativa 1: Axios puro — segue redirecionamentos HTTP
         const res = await http.get(atv.url, {
-            maxRedirects: 5,
+            maxRedirects: 4,
             validateStatus: s => s >= 200 && s < 400,
-            timeout: 8000,
+            timeout: 5000,
         });
+
+        // 1. Checa se já fomos redirecionados direto para o arquivo final (ex: Youtube, Drive)
         const finalUrl = res.request?.res?.responseUrl || res.request?.responseURL || '';
-        
         if (finalUrl && finalUrl !== atv.url) {
             const isExternal = !finalUrl.includes('unifenas.br');
             const isDirectFile = finalUrl.includes('pluginfile.php');
@@ -105,86 +105,20 @@ const makeBypassFn = (http, browser, sendLog) => async (atv) => {
             }
         }
 
-        // Tentativa 2: Cheerio no HTML — procura link de workaround
-        const $ = cheerio.load(res.data);
-        const workaround = $('.resourceworkaround a, .urlworkaround a').first().attr('href')
-            || $('object#resourceobject').attr('data')
-            || $('iframe#resourceobject').attr('src')
-            || $('a[href$=".pdf"], a[href$=".docx"], a[href$=".pptx"], a[href$=".xlsx"]').first().attr('href');
-        if (workaround) {
-            atv.url = workaround;
-            return;
-        }
-
-        // Tentativa 3: Puppeteer — apenas quando JS é realmente necessário
-        sendLog(`           🔍 JS necessário para: ${atv.nome}`);
-        let actPage = null;
-        try {
-            actPage = await browser.newPage();
-            await blockAssets(actPage);
-            await actPage.setUserAgent(USER_AGENT);
-            await actPage.goto(atv.url, { waitUntil: 'domcontentloaded', timeout: 15000 });
-
-            const formBtnSelector = 'form[action] button[type="submit"], input[type="submit"]';
-            const hasForm = await actPage.$(formBtnSelector);
-            const hasLink = hasForm ? false : await actPage.evaluate(() =>
-                Array.from(document.querySelectorAll('a')).some(a =>
-                    a.textContent.toLowerCase().includes('abrir em uma nova janela') || a.classList.contains('urlworkaround')
-                )
-            );
-
-            if (hasForm || hasLink) {
-                const newPagePromise = new Promise(resolve => {
-                    browser.once('targetcreated', async target => {
-                        if (target.type() === 'page') resolve(await target.page());
-                    });
-                });
-
-                if (hasForm) {
-                    await actPage.click(formBtnSelector);
-                } else {
-                    await actPage.evaluate(() => {
-                        const t = Array.from(document.querySelectorAll('a')).find(a =>
-                            a.textContent.toLowerCase().includes('abrir em uma nova janela') ||
-                            a.parentElement?.classList.contains('urlworkaround') ||
-                            a.parentElement?.classList.contains('resourceworkaround')
-                        );
-                        if (t) t.click();
-                    });
-                }
-
-                const result = await Promise.race([
-                    newPagePromise,
-                    actPage.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 6000 }).then(() => actPage),
-                    sleep(4000).then(() => null),
-                ]);
-
-                if (result && result.url() !== 'about:blank') {
-                    atv.url = result.url();
-                    if (result !== actPage) await result.close();
-                } else {
-                    const embedUrl = await actPage.evaluate(() => {
-                        const e = document.querySelector('iframe#resourceobject, object#resourceobject');
-                        return e ? (e.src || e.data) : null;
-                    });
-                    if (embedUrl) atv.url = embedUrl;
-                    else if (actPage.url() !== atv.url) atv.url = actPage.url();
-                }
-            } else {
-                const embedUrl = await actPage.evaluate(() => {
-                    const e = document.querySelector('iframe#resourceobject, object#resourceobject');
-                    return e ? (e.src || e.data) : null;
-                });
-                if (embedUrl) atv.url = embedUrl;
+        // 2. Extrai iframe/data/workaround com Cheerio (PDFs, PPTXs embeddados)
+        if (res.data) {
+            const $ = cheerio.load(res.data);
+            const workaround = $('.resourceworkaround a, .urlworkaround a').first().attr('href')
+                || $('object#resourceobject').attr('data')
+                || $('iframe#resourceobject').attr('src')
+                || $('a[href$=".pdf"], a[href$=".docx"], a[href$=".pptx"], a[href$=".xlsx"]').first().attr('href');
+                
+            if (workaround) {
+                atv.url = workaround;
             }
-
-            if (actPage && !actPage.isClosed()) await actPage.close();
-        } catch (e) {
-            if (actPage && !actPage.isClosed()) await actPage.close();
         }
     } catch (e) {
-        // Erro leve — mantém URL original sem travar o fluxo
-        console.log(`Bypass ignorado para "${atv.nome}": ${e.message}`);
+        // Falhas silenciosas de rede não devem travar a raspagem, a URL original Moodle funcionará no clique nativo do usuário
     }
 };
 
@@ -343,7 +277,7 @@ app.post('/api/login', async (req, res) => {
 
         sendLog('[5/5] 📖 Entrando em cada matéria para raspar as seções...');
 
-        // ─── Processar cursos em lotes paralelos de 2 ────────────────────────
+        // ─── Processar cursos em lotes paralelos de 3 ────────────────────────
         const processarCurso = async (curso) => {
             sendLog(`  → Acessando: ${curso.name}`);
             try {
@@ -388,8 +322,8 @@ app.post('/api/login', async (req, res) => {
                             }
                         }
 
-                        // Resolve URLs de arquivos/links (Axios→Cheerio→Puppeteer)
-                        const bypassBatchSize = 3;
+                        // Resolve URLs de arquivos/links (Bypass Axios+Cheerio Rápido)
+                        const bypassBatchSize = 10;
                         for (let i = 0; i < atividades.length; i += bypassBatchSize) {
                             await Promise.all(atividades.slice(i, i + bypassBatchSize).map(processBypass));
                         }
@@ -461,8 +395,8 @@ app.post('/api/login', async (req, res) => {
             }
         };
 
-        // Lotes de 2 cursos em paralelo
-        const courseBatchSize = 2;
+        // Lotes de 3 cursos em paralelo
+        const courseBatchSize = 3;
         for (let i = 0; i < courses.length; i += courseBatchSize) {
             await Promise.all(courses.slice(i, i + courseBatchSize).map(processarCurso));
         }
@@ -544,10 +478,10 @@ app.post('/api/sync-recent', async (req, res) => {
         const processUrl = async (url) => {
             const fakeAtv = { nome: url, url, tipo: 'Arquivo' };
             await processBypass(fakeAtv);
-            return { url, status: 'ok' };
+            return { url: fakeAtv.url, status: 'ok' };
         };
 
-        const bypassBatchSize = 3;
+        const bypassBatchSize = 10;
         const results = [];
         for (let i = 0; i < urls.length; i += bypassBatchSize) {
             const batch = urls.slice(i, i + bypassBatchSize);
