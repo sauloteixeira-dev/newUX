@@ -13,6 +13,9 @@ app.use(express.json());
 // Utilitário: sleep
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Rota de health-check — usada pelo frontend para acordar o servidor do Render
+app.get('/ping', (req, res) => res.json({ status: 'ok', ts: Date.now() }));
+
 // Utilitário: Bloquear assets inúteis no Puppeteer
 const blockAssets = async (page) => {
     await page.setRequestInterception(true);

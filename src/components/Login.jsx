@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './Login.css';
 
 const Login = ({ onLoginSuccess }) => {
@@ -9,6 +9,27 @@ const Login = ({ onLoginSuccess }) => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'online' | 'waking'
+
+  // Pre-warm: acorda o servidor do Render ao carregar a página
+  useEffect(() => {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const ping = () => {
+      fetch(`${apiUrl}/ping`)
+        .then(r => r.json())
+        .then(() => {
+          console.log('[FRONT] Servidor acordado e pronto!');
+          setServerStatus('online');
+        })
+        .catch(() => {
+          console.log('[FRONT] Servidor ainda acordando...');
+          setServerStatus('waking');
+          // Tenta novamente em 5s
+          setTimeout(ping, 5000);
+        });
+    };
+    ping();
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -173,6 +194,19 @@ const Login = ({ onLoginSuccess }) => {
         {loading && (
           <div className="loading-container" style={{ marginTop: '20px', textAlign: 'center' }}>
             <p className="loading-log-msg" style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{logMsg}</p>
+          </div>
+        )}
+
+        {/* Indicador de status do servidor */}
+        {!loading && serverStatus !== 'online' && (
+          <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <svg className="spinner" viewBox="0 0 50 50" style={{ width: '14px', height: '14px' }}><circle cx="25" cy="25" r="20" fill="none" strokeWidth="5"></circle></svg>
+            {serverStatus === 'checking' ? 'Verificando servidor...' : '⚡ Servidor acordando, aguarde...'}
+          </div>
+        )}
+        {!loading && serverStatus === 'online' && (
+          <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '0.78rem', color: '#4ade80' }}>
+            ✅ Servidor pronto!
           </div>
         )}
       </div>
