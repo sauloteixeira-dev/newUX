@@ -93,9 +93,16 @@ const makeBypassFn = (http, browser, sendLog) => async (atv) => {
             timeout: 8000,
         });
         const finalUrl = res.request?.res?.responseUrl || res.request?.responseURL || '';
-        if (finalUrl && !finalUrl.includes('mod/resource/view.php') && !finalUrl.includes('mod/url/view.php')) {
-            atv.url = finalUrl;
-            return;
+        
+        if (finalUrl && finalUrl !== atv.url) {
+            const isExternal = !finalUrl.includes('unifenas.br');
+            const isDirectFile = finalUrl.includes('pluginfile.php');
+            const isErrorRedirect = finalUrl.includes('/login/') || finalUrl.includes('/my/') || finalUrl.includes('/course/view.php');
+            
+            if (!isErrorRedirect && (isExternal || isDirectFile)) {
+                atv.url = finalUrl;
+                return;
+            }
         }
 
         // Tentativa 2: Cheerio no HTML — procura link de workaround
