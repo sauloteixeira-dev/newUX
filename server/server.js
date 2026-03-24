@@ -578,7 +578,7 @@ app.post('/api/sync-recent', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🤖 Express Scraper API - UNIFENAS`);
     console.log(`✅ Rodando na porta ${PORT}\n`);
 });

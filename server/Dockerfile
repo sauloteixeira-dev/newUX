@@ -20,6 +20,5 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
-
-EXPOSE 3001
+# A porta será definida dinamicamente pelo ambiente Host (ex: Render) usando process.env.PORT
 CMD ["node", "server.js"]

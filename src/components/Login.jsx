@@ -21,11 +21,15 @@ const Login = ({ onLoginSuccess }) => {
 
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      console.log(`[FRONT] Enviando POST para: ${apiUrl}/api/login`);
+      
       const response = await fetch(`${apiUrl}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matricula, senha })
       });
+
+      console.log(`[FRONT] Resposta recebida. Status: ${response.status}`);
 
       if (!response.body) throw new Error('Servidor não suporta streaming.');
 
@@ -50,7 +54,10 @@ const Login = ({ onLoginSuccess }) => {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            console.log(`[FRONT] Stream finalizado pelo servidor.`);
+            break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -60,6 +67,7 @@ const Login = ({ onLoginSuccess }) => {
           if (!line.trim()) continue;
           try {
             const chunk = JSON.parse(line);
+            console.log(`[FRONT] Chunk processado:`, chunk);
             if (chunk.type === 'log') {
               setLogMsg(chunk.message);
               // Atualizar progresso com base em palavras-chave
