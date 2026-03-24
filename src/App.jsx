@@ -69,7 +69,8 @@ function App() {
   const performRecentSync = async (mat, sen, urls) => {
     setIsSyncing(true);
     try {
-      const response = await fetch('http://localhost:3001/api/sync-recent', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/sync-recent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matricula: mat, senha: sen, urls })
@@ -92,7 +93,8 @@ function App() {
   const performBackgroundSync = async (mat, sen) => {
     setIsSyncing(true);
     try {
-      const response = await fetch('http://localhost:3001/api/login', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ matricula: mat, senha: sen })
