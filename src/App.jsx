@@ -69,7 +69,7 @@ function App() {
   const performRecentSync = async (mat, sen, urls) => {
     setIsSyncing(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiUrl = 'http://localhost:3001';
       const response = await fetch(`${apiUrl}/api/sync-recent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -93,7 +93,7 @@ function App() {
   const performBackgroundSync = async (mat, sen) => {
     setIsSyncing(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiUrl = 'http://localhost:3001';
       const response = await fetch(`${apiUrl}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

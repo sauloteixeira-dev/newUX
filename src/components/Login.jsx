@@ -11,25 +11,7 @@ const Login = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [serverStatus, setServerStatus] = useState('checking'); // 'checking' | 'online' | 'waking'
 
-  // Pre-warm: acorda o servidor do Render ao carregar a página
-  useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-    const ping = () => {
-      fetch(`${apiUrl}/ping`)
-        .then(r => r.json())
-        .then(() => {
-          console.log('[FRONT] Servidor acordado e pronto!');
-          setServerStatus('online');
-        })
-        .catch(() => {
-          console.log('[FRONT] Servidor ainda acordando...');
-          setServerStatus('waking');
-          // Tenta novamente em 5s
-          setTimeout(ping, 5000);
-        });
-    };
-    ping();
-  }, []);
+  // Sistema rodando localmente - Sem necessidade de pre-warm.
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -44,7 +26,7 @@ const Login = ({ onLoginSuccess }) => {
     console.log(`[FRONT] ⏱️ INÍCIO DA RASPAGEM: ${new Date().toLocaleTimeString()}`);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const apiUrl = 'http://localhost:3001';
       console.log(`[FRONT] Enviando POST para: ${apiUrl}/api/login`);
       
       const response = await fetch(`${apiUrl}/api/login`, {
@@ -141,7 +123,15 @@ const Login = ({ onLoginSuccess }) => {
         <div className="login-header">
           <div className="logo-icon-large">UN</div>
           <h1>Ambiente Virtual</h1>
-          <p>Faça login com seus dados do site da unifenas.aluno</p>
+          
+          <div style={{
+            background: '#fff3cd', color: '#856404', padding: '12px', 
+            borderRadius: '8px', fontSize: '0.85rem', marginBottom: '20px', 
+            border: '1px solid #ffeeba', textAlign: 'left', lineHeight: '1.4'
+          }}>
+            <strong>⚠️ Atenção:</strong> Para que os PDFs e Aulas abram perfeitamente sem erros de segurança, você precisa primeiro abrir uma nova aba neste navegador e fazer login no <a href="https://aluno.unifenas.br/" target="_blank" rel="noreferrer" style={{color: '#856404', textDecoration: 'underline'}}>aluno.unifenas.br</a>.<br/><br/>
+            Depois de logar lá, volte aqui e insira seus dados abaixo para carregar as matérias.
+          </div>
         </div>
 
         {error && <div className="login-error">{error}</div>}
@@ -204,18 +194,6 @@ const Login = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Indicador de status do servidor */}
-        {!loading && serverStatus !== 'online' && (
-          <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <svg className="spinner" viewBox="0 0 50 50" style={{ width: '14px', height: '14px' }}><circle cx="25" cy="25" r="20" fill="none" strokeWidth="5"></circle></svg>
-            {serverStatus === 'checking' ? 'Verificando servidor...' : '⚡ Servidor acordando, aguarde...'}
-          </div>
-        )}
-        {!loading && serverStatus === 'online' && (
-          <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '0.78rem', color: '#4ade80' }}>
-            ✅ Servidor pronto!
-          </div>
-        )}
       </div>
     </div>
   );
