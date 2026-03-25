@@ -121,7 +121,7 @@ const Login = ({ onLoginSuccess }) => {
     <div className="login-container">
       <div className="login-box">
         <div className="login-header">
-          <div className="logo-icon-large">UN</div>
+          <img src="/logo.png" alt="Portal ADS" className="logo-icon-large" />
           <h1>Ambiente Virtual</h1>
           
           <div style={{

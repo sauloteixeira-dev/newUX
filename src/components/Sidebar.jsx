@@ -8,7 +8,7 @@ const Sidebar = ({ cursos, activeCourseId, onSelectCourse, user, isOpen, onClose
     <aside className={`lms-sidebar ${isOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-header">
         <div className="logo-container">
-          <div className="logo-icon">UN</div>
+          <img src="/logo.png" alt="Portal ADS" className="logo-icon" />
           <h2>Ambiente Virtual</h2>
         </div>
       </div>

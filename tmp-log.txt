@@ -1,0 +1,25 @@
+﻿fix: corrige syntax error no iniciar.bat do if exist par├¬nteses
+docs: adiciona README com as instrucoes de execucao local e altera porta pra 5180
+feat: muda sistema para rodar 100% local com iniciar.bat e instrucoes de seguranca
+feat: adiciona cronometro de raspagem no console do frontend
+perf: remove fallback do puppeteer no bypass das aulas garantindo execucao ultra rapida de Axios+Cheerio em lotes de 10 paralelos
+fix: impede o Axios de capturar redirecionamentos de fallback como login/my do Moodle, mantendo links intactos
+fix: altera waitForSelector para aguardar links de curso (coursename) para evitar skeleton loaders do Moodle que geravam lista vazia de materias
+refactor: reescreve server.js com parseAtividades compartilhado, bypass hibrido no sync-recent e sleeps otimizados
+perf: substitui processBypass por versao hibrida Axios->Cheerio->Puppeteer para economizar RAM no Render
+fix: corrige URLs hardcoded localhost:3001 no App.jsx para usar VITE_API_URL em producao
+fix: amplia seletores e sleep de cursos para funcionar no render EUA com latencia Brasil
+feat: adiciona rota /ping no backend e pre-warm automatico com indicador visual no frontend para cold-start do render
+trigger: corrige identidade git para desbloquear deploy vercel
+fix: bind express em 0.0.0.0 para render proxy funcionar e remove EXPOSE fixo do dockerfile; adiciona logs debug no frontend
+fix: remove flag --no-zygote restante que causa congelamento infinito do chrome em nuvem
+fix: recupera as chaves de bloco for perdidas no commit anterior de performance do scraper causando erro de sintaxe node
+perf: otimizado parser do moodle para ler se├º├Áes e atividades da pagina principal cortando 90% das requisi├º├Áes extras HTTP e reduzindo tempo base
+fix: remove flag --single-process que causa segfault memory crash no puppeteer em host free
+perf: remove delays artificiais de mais de 15 segundos na raspagem inicial para acelerar cloud
+fix: reescreve dockerfile nativo com node 18 slim e adiciona flags memoria chrome puppeteer para parar erro timeout ws endpoint
+fix: dockerfile permissions and executable path for chromium
+feat: prepara projeto para deploy automatico no render e vercel via variaveis de ambiente e dockerfile
+fix: limpa sufixos do moodle do titulo e impede consumo automatico de LTI (erro 401)
+fix: espacamento do tipo de arquivo no titulo e readme atualizado
+feat: otimizacao do scraper Moodle e melhorias no login

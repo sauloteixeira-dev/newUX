@@ -23,8 +23,7 @@
 }
 
 .logo-icon {
-  background: linear-gradient(135deg, #002855 0%, #0056b3 100%);
-  color: white;
+  object-fit: contain;
   width: 36px;
   height: 36px;
   border-radius: 8px;

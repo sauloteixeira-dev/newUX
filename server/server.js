@@ -63,7 +63,17 @@ const parseAtividades = ($ctx, $) => {
         else if ($a.hasClass('modtype_url')) tipo = 'Link Externo';
         else if ($a.hasClass('modtype_folder')) tipo = 'Pasta';
 
-        atividades.push({ nome, url: actLink.attr('href'), tipo });
+        let url = actLink.attr('href') || '';
+        
+        // Bypass direto da página intermediária da Ferramenta Externa (LTI)
+        if (tipo === 'Ferramenta externa' && url.includes('mod/lti/view.php')) {
+            url = url.replace('mod/lti/view.php', 'mod/lti/launch.php');
+            if (!url.includes('triggerview=0')) {
+                url += (url.includes('?') ? '&' : '?') + 'triggerview=0';
+            }
+        }
+
+        atividades.push({ nome, url, tipo });
     });
     return atividades;
 };
@@ -178,7 +188,7 @@ app.post('/api/login', async (req, res) => {
         // ─── ETAPA 2: SSO → Moodle ──────────────────────────────────────────
         sendLog('[2/5] 🔄 Conectando ao AVA Moodle via SSO...');
         await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
-        // Sem sleep aqui — networkidle2 garante que o SSO completou
+        await sleep(3000); // Revertido: adicionado sleep para garantir que os redirects do SSO terminem antes de acessar meus cursos
         sendLog('[2/5] ✓ Sessão Moodle ativa!');
 
         // ─── ETAPA 3: Meus Cursos ────────────────────────────────────────────
@@ -447,7 +457,7 @@ app.post('/api/sync-recent', async (req, res) => {
 
         sendLog('[2/3] 🔄 Conectando SSO Moodle...');
         await page.goto('https://aluno.unifenas.br/auto-login-moodle', { waitUntil: 'networkidle2', timeout: 60000 });
-        // Sem sleep — networkidle2 já aguarda o SSO
+        await sleep(3000); // Revertido: aguardar redirect do Moodle
 
         // Extrai cookies para usar Axios com sessão autenticada
         const allCookies = await page.cookies('https://ava.unifenas.br');
