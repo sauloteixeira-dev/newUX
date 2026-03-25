@@ -10,12 +10,17 @@ echo.
 :: 1. Verifica se o Node.js esta instalado
 node -v >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [X] Node.js nao encontrado! 
-    echo Para o sistema funcionar, voce precisa instalar o Node.js.
-    echo Baixe e instale a partir de: https://nodejs.org/
-    echo Apos instalar, abra este programa novamente.
-    pause
-    exit
+    echo [X] Motor principal do sistema nao encontrado.
+    echo Baixando o Instalador Oficial do Node.js (Isso demora alguns segundos)...
+    curl -L -o "%TEMP%\node_setup.msi" "https://nodejs.org/dist/v20.11.1/node-v20.11.1-x64.msi" --silent
+    echo.
+    echo Pressione SIM na tela de seguranca do Windows que vai abrir! Instalando...
+    start /wait msiexec /i "%TEMP%\node_setup.msi" /passive /norestart
+    
+    :: Atualiza o caminho local para o sistema reconhecer o Node sem precisar reiniciar o EXE
+    set "PATH=%PATH%;C:\Program Files\nodejs"
+    echo Instalacao do motor concluida!
+    echo.
 )
 
 :: 2. Define os caminhos de instalacao silenciosa
