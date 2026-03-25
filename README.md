@@ -1,23 +1,39 @@
-# AVA Unifenas - Versão Local (Desktop)
+# Portal ADS Express 🚀🎓
 
-Este projeto foi desenvolvido para organizar as aulas do Moodle da UNIFENAS em uma interface limpa, rápida e moderna. Devido às altas restrições de segurança do AVA da Unifenas contra servidores em nuvem, este sistema foi projetado para rodar **exclusivamente no seu computador local**.
+Este projeto foi desenvolvido para organizar as aulas do Moodle da UNIFENAS em uma interface limpa, rápida e moderna. Devido às restrições de segurança do portal original contra servidores hospedados em nuvem, este sistema foi modernizado e projetado para rodar **exclusivamente de forma nativa no seu computador**.
 
-## 🚀 Como Usar (Muito fácil)
+---
 
-1. **Baixe ou Clone** esta pasta para o seu computador.
-2. Certifique-se de que você tem o [Node.js](https://nodejs.org/) instalado.
-3. Dê **duplo-clique** no arquivo `iniciar.bat`.
-4. Ele vai abrir duas janelas pretas (não as feche!) e, em alguns segundos, vai abrir o painel de login no seu navegador (`http://localhost:5180`).
+## 🚀 Como Instalar (Muito fácil)
+
+Agora o sistema possui um instalador automático! Você não precisa de conhecimentos técnicos para usar.
+
+1. Acesse a aba **[Releases (Lançamentos)](https://github.com/sauloteixeira-dev/newUX/releases/latest)** aqui no GitHub.
+2. Faça o download do arquivo executável (`.exe`) disponível lá.
+3. Dê **duplo-clique** no arquivo que você baixou.
+4. A mágica acontece! O instalador vai, automaticamente:
+   - Baixar a versão mais recente do código-fonte;
+   - Criar uma pasta silenciosa no seu Windows;
+   - Criar um Atalho chamado **"Portal ADS"** na sua **Área de Trabalho (Desktop)**!
+5. **Pronto!** Sempre que quiser entrar nas suas aulas, basta usar o atalho que surgiu na sua tela inicial! 
+
+*(Atenção: O sistema é movido a Javascript nativo, por isso exige que o programa gratuito [Node.js](https://nodejs.org/) esteja instalado no seu PC previamente).*
+
+---
 
 ## ⚠️ Segurança dos Arquivos (Aviso Importante)
 
-Para que você consiga abrir os PDFs e vídeos que estão protegidos pela faculdade:
-- Sempre abra uma **nova aba** no seu Google Chrome, entre no portal `aluno.unifenas.br` e faça o login normal da faculdade lá.
-- Deixe o Moodle aberto lá.
-- Volte aqui para o `localhost:5180` e acesse suas aulas pela nossa interface limpa. Todos os links vão abrir direto sem pedir senha, porque o navegador já estará com o seu "crachá" da Unifenas.
+Para que o Moodle valide o seu acesso aos **PDFs** e **Vídeos** protegidos pelas licenças da universidade:
+- Sempre abra uma **nova aba** no Google Chrome e faça o login normal no portal oficial: `aluno.unifenas.br`.
+- Mantenha ele aberto em qualquer canto.
+- Abra o seu atalho do **Portal ADS Express**. Os links das suas tarefas agora vão abrir direto, como mágica, porque seu Chrome vai reaproveitar a sessão autenticada que abrimos!
 
-## ⚙️ Informações Técnicas
+---
 
-- **Frontend:** React + Vite (Porta 5180)
-- **Backend:** Node.js + Express + Puppeteer + Axios (Porta 3001)
-- **Scraper:** Um bypass ultrarrápido capta até 10 aulas simultaneamente usando Axios/Cheerio para reduzir o tempo que você espera.
+## ⚙️ Informações Técnicas e Arquitetura
+
+- **Frontend UI:** Construído em React 18 + Vite (Porta 5180). Escalas tipográficas adaptáveis e suporte dinâmico para Dark/Light Mode.
+- **Backend API:** Desenvolvido em Node.js e Express.js (Porta 3001).
+- **Scraping Inteligente:** Bypass instantâneo das intermediações e modais chatos do Moodle (como os de Ferramenta Externa LTI e pastas de Arquivos), enviando o aluno direto pro link de "Launch".
+- **Híbrido Puppeteer/Axios:** O uso massivo de Puppeteer foi substituído por uma arquitetura multithread paralela de `Axios` e `Cheerio`, lendo lotes de até 10 matérias ao mesmo tempo direto da rede HTTP e poupando muita memória RAM do computador.
+- **Auto-Update Transparente:** O Instalador (criado a partir do `Instalador.bat`) consome a branch `main` deste repositório sem precisar do Git estar instalado na máquina do usuário final. Suas atualizações comitam sempre a versão mais afiada para todo mundo instantaneamente!
