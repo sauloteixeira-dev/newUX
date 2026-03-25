@@ -24,13 +24,13 @@ echo Limpando portas antigas...
 FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr :3001') DO TaskKill.exe /F /PID %%a >nul 2>&1
 FOR /F "tokens=5" %%a IN ('netstat -aon ^| findstr :5180') DO TaskKill.exe /F /PID %%a >nul 2>&1
 
-:: Inicia o backend em uma nova janela oculta/minimizada (opcional) ou visível
+:: Inicia o backend de forma invisível via PowerShell
 echo Subindo Servidor Inteligente (Porta 3001)...
-start "Servidor Moodle (Nao feche)" cmd /k "cd server && npm start"
+powershell -WindowStyle Hidden -Command "Start-Process cmd -ArgumentList '/c cd server && npm start' -WindowStyle Hidden"
 
-:: Abre o frontend
+:: Abre o frontend de forma invisível
 echo Subindo Interface Grafica...
-start "Interface do Aluno" cmd /k "npm run dev"
+powershell -WindowStyle Hidden -Command "Start-Process cmd -ArgumentList '/c npm run dev' -WindowStyle Hidden"
 
 :: Aguarda uns segundos para o Vite subir e abre o navegador
 timeout /t 3 /nobreak >nul
